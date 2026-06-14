@@ -62,7 +62,7 @@ def styled_pie(
     title: str | None = None,
     colors: list | None = None,
     min_pct_label: float = 0.0,
-    label_fontsize: float = 15,
+    label_fontsize: float = 18,
     title_fontsize: float = 18,
     startangle: float = 90,
     figsize: tuple[float, float] = (11, 6.5),
@@ -195,6 +195,37 @@ def lump_small(labels, values, *, threshold_pct, other_label="Other"):
 
 _SOLUTIONS = {"A": "Phenolic", "B": "Furanoid", "C": "Hydrocarbon", "D": "Oxygenate"}
 
+# Biogenic VOC scenarios (extended experiments) — composition by mass % of
+# total VOC, transcribed from the scenario table. (name, mass_pct).
+BIOGENIC = {
+    "A": {
+        "title": "Biogenic Option A — realism-balanced (eucalypt-faithful)",
+        "startangle": 0,   # small terpenes (end of list) land on the right edge
+        "components": [
+            ("Isoprene", 32.1),
+            ("1,8-cineole", 20.4),
+            ("α-pinene", 11.6),
+            ("(E)-β-ocimene", 10.3),
+            ("d-limonene", 10.3),
+            ("β-pinene", 6.4),
+            ("α-phellandrene", 2.6),
+            ("p-cymene", 2.5),
+            ("β-caryophyllene", 3.9),
+        ],
+    },
+    "B": {
+        "title": "Biogenic Option B — MCM-closable (minimal / model-friendly)",
+        "startangle": 90,
+        "components": [
+            ("Isoprene", 32.9),
+            ("α-pinene", 23.7),
+            ("d-limonene", 21.1),
+            ("β-pinene", 18.4),
+            ("β-caryophyllene", 3.9),
+        ],
+    },
+}
+
 # Per-solution pie rotation (90 = first slice at top). Solution C starts at the
 # right (0) so its big Monoterpenes wedge sweeps the left/bottom and the small
 # slices + "other hydrocarbons" land on the right edge instead of crowding top-left.
@@ -237,7 +268,7 @@ def panel_figure(
             labels, values, ax=ax,
             colors=solution_colors(sol, len(values)),
             title=f"Solution {sol} — {_SOLUTIONS[sol]}",
-            label_fontsize=11, title_fontsize=14,
+            label_fontsize=14, title_fontsize=14,
             startangle=_START_ANGLE[sol],
         )
 
@@ -288,6 +319,17 @@ def render_all(out_dir: Path = FIG_DIR) -> list[Path]:
     )
     p = out_dir / "pie_gases.png"
     fig.savefig(p); plt.close(fig); written.append(p)
+
+    # 4) Biogenic VOC scenarios (extended experiments), each on its own.
+    for opt, spec in BIOGENIC.items():
+        labels = [c[0] for c in spec["components"]]
+        values = [c[1] for c in spec["components"]]
+        fig, _ = styled_pie(
+            labels, values, title=spec["title"],
+            startangle=spec["startangle"],
+        )
+        p = out_dir / f"pie_biogenic_option{opt}.png"
+        fig.savefig(p); plt.close(fig); written.append(p)
 
     return written
 

@@ -1,0 +1,40 @@
+solution,key,compound,mass_fraction
+A,guaiacol,Guaiacol,0.127036
+A,o_cresol,o-Cresol,0.068404
+A,catechol,Catechol,0.058632
+A,creosol,Creosol,0.058632
+A,phenol,Phenol,0.087948
+A,eucalyptol,"Eucalyptol (1,8-cineole)",0.016287
+A,furfural,2-furfural,0.094463
+A,methylfurfural,5-methyl-furfural,0.058632
+A,furfuryl_alcohol,2-furanmethanol,0.055375
+A,furanone,2(3H)-Furanone,0.114007
+A,furan,Furan,0.084691
+A,hmf,5-(hydroxymethyl)-2-furfural,0.091205
+A,methylfuran,2-methylfuran,0.052117
+A,dimethylfuran,"2,5-dimethylfuran",0.032573
+B,a_pinene,a-pinene,0.494104
+B,benzene,benzene,0.145985
+B,toluene,Toluene,0.157215
+B,isoprene,Isoprene,0.089837
+B,ethylbenzene,Ethyl Benzene,0.005615
+B,m_xylene,m-xylene,0.038181
+B,o_xylene,o-xylene,0.012914
+B,caryophyllene,b-caryophyllene,0.056148
+C,methanol,Methanol,0.207407
+C,acetaldehyde,Acetaldehyde,0.177778
+C,acrolein,Acrolein,0.148148
+C,methyl_acetate,Methyl Acetate,0.042702
+C,hydroxyacetone,Hydroxy Acetone,0.061002
+C,butanedione,"2,3-butanedione",0.083951
+C,acetone,Acetone,0.079012
+C,mvk,MVK,0.030815
+C,macr,MACR,0.012198
+C,crotonaldehyde,Crotonaldehyde,0.021185
+C,methylglyoxal,Methyl Glyoxal,0.05679
+C,methyl_methacrylate,Methyl methacrylate,0.02963
+C,acetonitrile,acetonitrile,0.024691
+C,mek,MEK,0.024691
+D,acetic_acid,Acetic Acid,0.730543
+D,formic_acid,Formic Acid,0.125329
+D,acrylic_acid,Acrylic acid,0.144128

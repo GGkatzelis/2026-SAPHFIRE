@@ -1,0 +1,8 @@
+key,species,MW_g_per_mol,bottle_concentration_ppm,balance_gas,default_dosing,enabled,needs_review
+propene,Propene,42.081,,N2,flow_time,True,True
+ethene,Ethene,28.054,,N2,flow_time,True,True
+acetylene,acetylene,26.038,,N2,flow_time,True,True
+no,NO,30.006,,N2,flow_time,True,True
+no2,NO2,46.005,,N2,flow_time,True,True
+hono,HONO,47.013,,N2,flow_time,True,True
+co,CO,28.01,,N2,flow_time,True,True

@@ -91,7 +91,33 @@ def load_fingerprint(path: Path = DATA_XLSX, sheet: str = SHEET) -> pd.DataFrame
             )
         )
 
-    return pd.DataFrame(rows)
+    return apply_injection_updates(pd.DataFrame(rows))
+
+
+# Compounds reassigned from a liquid solution to gas-phase injection. Their mass
+# leaves the solution and the solution's mixture_mass_pct is renormalised over
+# the remaining members. (Updated injection list: 1,3-butadiene is injected from
+# a gas bottle, not the Hydrocarbon liquid.)
+REASSIGN_TO_GAS = {"1,3-butadiene": "Hydrocarbon"}
+
+
+def apply_injection_updates(fp: pd.DataFrame) -> pd.DataFrame:
+    """Apply injection-planning adjustments to the raw FIRELAB fingerprint.
+
+    Currently: move gas-phase surrogates out of their liquid solution into the
+    Gases mixture and renormalise the donor solution's mixture_mass_pct.
+    """
+    fp = fp.copy()
+    for surrogate, donor_mix in REASSIGN_TO_GAS.items():
+        mask = fp["surrogate"] == surrogate
+        if not mask.any():
+            continue
+        fp.loc[mask, ["solution", "mixture", "mixture_mass_pct"]] = [
+            None, "Gases", float("nan")]
+        donor = (fp["mixture"] == donor_mix)
+        total = fp.loc[donor, "mixture_mass_pct"].sum()
+        fp.loc[donor, "mixture_mass_pct"] = fp.loc[donor, "mixture_mass_pct"] / total * 100.0
+    return fp
 
 
 def mixture_summary(fp: pd.DataFrame) -> pd.DataFrame:

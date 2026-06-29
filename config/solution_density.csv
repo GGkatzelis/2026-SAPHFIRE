@@ -1,0 +1,5 @@
+solution,computed_density_g_per_mL,liquid_mass_fraction_covered,measured_density_g_per_mL,prep_volume_mL,prep_note
+A,1.0533,1.0,,10.0,Furan is volatile — prepare/seal carefully.
+B,0.8456,1.0,,10.0,
+C,0.8489,1.0,,10.0,Methylglyoxal is a 40% aqueous reagent (brings water). Aqueous.
+D,1.0688,1.0,,10.0,Acids — keep separate from the carbonyls (Mix C). Acrylic acid polymerizes.

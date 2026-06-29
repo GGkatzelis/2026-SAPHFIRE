@@ -1,0 +1,7 @@
+regime,species,target_ppb,enabled
+flaming,no,,True
+flaming,no2,,True
+flaming,hono,,True
+smoldering,no,,True
+smoldering,no2,,True
+smoldering,hono,,True

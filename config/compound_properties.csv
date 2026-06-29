@@ -1,0 +1,43 @@
+key,compound,formula,MW_g_per_mol,density_g_per_mL,solubility_H2O_g_per_L,state_at_RT,reagent_conc,k_oh_298,CAS,comment,purity_fraction,enabled,needs_review
+guaiacol,Guaiacol,C7H8O2,124.139,1.112,23.0,solid,1.0,,90-05-1,,0.97,True,True
+o_cresol,o-Cresol,C7H8O,108.14,1.05,25.0,liquid,1.0,,95-48-7,mp 31 C,0.97,True,True
+catechol,Catechol,C6H6O2,110.112,1.0,430.0,solid,1.0,,120-80-9,,0.97,True,True
+creosol,Creosol,C8H10O2,138.166,1.092,,liquid,1.0,,93-51-6,,0.97,True,True
+phenol,Phenol,C6H6O,94.113,1.0,84.0,solid,1.0,,108-95-2,,0.97,True,True
+eucalyptol,"Eucalyptol (1,8-cineole)",C10H18O,154.253,0.9225,,liquid,1.0,,470-82-6,"Eugenol unavailable -> eucalyptol substituted; ETHER, not a phenol; mp 1.5 C",0.97,True,True
+furfural,2-furfural,C5H4O2,96.085,1.16,,liquid,1.0,,98-01-1,,0.97,True,True
+methylfurfural,5-methyl-furfural,C6H6O2,110.112,1.11,,liquid,1.0,,620-02-0,,0.97,True,True
+furfuryl_alcohol,2-furanmethanol,C5H6O2,98.101,1.13,,liquid,1.0,,98-00-0,,0.97,True,True
+furanone,2(3H)-Furanone,C4H4O2,84.074,1.209,,liquid,1.0,,20825-71-2,maybe not enough available at FZJ,0.97,True,True
+furan,Furan,C4H4O,68.075,0.94,,liquid,1.0,,110-00-9,volatility risk (bp 31 C),0.97,True,True
+hmf,5-(hydroxymethyl)-2-furfural,C6H6O3,126.111,1.0,10.0,solid,1.0,,67-47-0,,0.97,True,True
+methylfuran,2-methylfuran,C5H6O,82.102,0.91,,liquid,1.0,,534-22-5,,0.97,True,True
+dimethylfuran,"2,5-dimethylfuran",C6H8O,96.129,0.905,,liquid,1.0,,625-86-5,,0.97,True,True
+a_pinene,a-pinene,C10H16,136.238,0.858,,liquid,1.0,,80-56-8,looking for monoterpene with enough available,0.97,True,True
+benzene,benzene,C6H6,78.114,0.876,,liquid,1.0,,71-43-2,,0.97,True,True
+toluene,Toluene,C7H8,92.141,0.867,,liquid,1.0,,108-88-3,,0.97,True,True
+isoprene,Isoprene,C5H8,68.119,0.681,,liquid,1.0,,78-79-5,,0.97,True,True
+ethylbenzene,Ethyl Benzene,C8H10,106.168,0.87,,liquid,1.0,,100-41-4,,0.97,True,True
+m_xylene,m-xylene,C8H10,106.168,0.868,,liquid,1.0,,108-38-3,,0.97,True,True
+o_xylene,o-xylene,C8H10,106.168,0.88,,liquid,1.0,,95-47-6,,0.97,True,True
+caryophyllene,b-caryophyllene,C15H24,204.357,0.91,,liquid,1.0,,87-44-5,mp ~25 C,0.97,True,True
+methanol,Methanol,CH4O,32.042,0.79,,liquid,1.0,,67-56-1,,0.97,True,True
+acetaldehyde,Acetaldehyde,C2H4O,44.053,0.784,,liquid,1.0,,75-07-0,,0.97,True,True
+acrolein,Acrolein,C3H4O,56.064,0.84,,liquid,1.0,,107-02-8,,0.97,True,True
+methyl_acetate,Methyl Acetate,C3H6O2,74.079,0.934,,liquid,1.0,,79-20-9,,0.97,True,True
+hydroxyacetone,Hydroxy Acetone,C3H6O2,74.079,1.08,,liquid,1.0,,116-09-6,,0.97,True,True
+butanedione,"2,3-butanedione",C4H6O2,86.09,0.983,,liquid,1.0,,431-03-8,,0.97,True,True
+acetone,Acetone,C3H6O,58.08,0.79,,liquid,1.0,,67-64-1,,0.97,True,True
+mvk,MVK,C4H6O,70.091,0.83,,liquid,1.0,,78-94-4,,0.97,True,True
+macr,MACR,C4H6O,70.091,0.83,,liquid,1.0,,78-85-3,,0.97,True,True
+crotonaldehyde,Crotonaldehyde,C4H6O,70.091,0.85,,liquid,1.0,,123-73-9,,0.97,True,True
+methylglyoxal,Methyl Glyoxal,C3H4O2,72.063,1.046,,liquid,0.4,,78-98-8,reagent is 40% in H2O,0.97,True,True
+methyl_methacrylate,Methyl methacrylate,C5H8O2,100.117,0.94,,liquid,1.0,,80-62-6,borrowed from JCNS-1,0.97,True,True
+acetonitrile,acetonitrile,C2H3N,41.053,0.786,,liquid,1.0,,75-05-8,,0.97,True,True
+mek,MEK,C4H8O,72.107,0.805,,liquid,1.0,,78-93-3,,0.97,True,True
+acetic_acid,Acetic Acid,C2H4O2,60.052,1.05,,liquid,1.0,,64-19-7,,0.97,True,True
+formic_acid,Formic Acid,CH2O2,46.025,1.22,,liquid,1.0,,64-18-6,,0.97,True,True
+acrylic_acid,Acrylic acid,C3H4O2,72.063,1.051,,liquid,1.0,,79-10-7,mp 13 C; polymerizes (use inhibited stock),0.97,True,True
+propene,Propene,C3H6,42.081,,,gas,1.0,2.63e-11,115-07-1,,0.97,True,True
+ethene,Ethene,C2H4,28.054,,,gas,1.0,8.5e-12,74-85-1,,0.97,True,True
+acetylene,acetylene,C2H2,26.038,,,gas,1.0,7.8e-13,74-86-2,,0.97,True,True

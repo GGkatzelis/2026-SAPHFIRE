@@ -7,3 +7,7 @@ __pycache__/
 
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
+
+# Office temp/lock files and scratch
+~$*
+_tmp_*

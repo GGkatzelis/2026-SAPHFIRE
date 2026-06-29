@@ -1,0 +1,7 @@
+{
+  "name": "SAPHIR",
+  "volume_m3": 270.0,
+  "temperature_K": 298.15,
+  "pressure_Pa": 101325.0,
+  "_note": "Edit to match the experiment's actual T/P and effective volume."
+}

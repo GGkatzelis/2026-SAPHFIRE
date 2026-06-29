@@ -1,0 +1,23 @@
+{
+  "_source": "Gkatzelis et al. (2024) ACP 24, 929, Fig. 7c: NOy/SumVOC = y0 + A*MCE^power (ppbv/ppbv). Speciation 70/20/10 NO/NO2/HONO from Roberts et al. (2020) FireLab flaming PMF, per M. Coggon email.",
+  "noy_voc_ratio_powerfit": {
+    "y0": 0.013,
+    "A": 1.72,
+    "power": 31
+  },
+  "noy_speciation": {
+    "no": 0.7,
+    "no2": 0.2,
+    "hono": 0.1
+  },
+  "mce_presets": {
+    "smoldering": 0.9,
+    "flaming": 0.95
+  },
+  "default_total_voc_ppb": 150.0,
+  "co_from_voc": {
+    "_source": "Gkatzelis et al. (2024) ACP 24, 929, Fig. 7b: SumNMOG = intercept + slope*CO (ppbv). 137 ppbv NMOG per ppmv CO = 0.137 ppbv/ppbv. CO = (SumVOC - intercept)/slope.",
+    "intercept_ppb_NMOG": 11.29,
+    "slope_ppbv_NMOG_per_ppbv_CO": 0.137
+  }
+}

@@ -1,43 +1,43 @@
 solution,mixture,subgroup,firelab_name,surrogate,key,formula,MW_g_per_mol,mass_pct,mixture_mass_pct,density_g_per_mL,solubility_H2O_g_per_L,state_at_RT,reagent_conc,k_oh_298,CAS,comment
-A,Phenolic + Furanoid,Phenolic,Guaiacol (=2-methoxyphenol),Guaiacol,guaiacol,C7H8O2,124.139,3.9,12.703583061889248,1.112,23.0,solid,1.0,,90-05-1,
-A,Phenolic + Furanoid,Phenolic,2-Methylphenol (=o-cresol) + anisol,o-Cresol,o_cresol,C7H8O,108.14,2.1,6.840390879478828,1.05,25.0,liquid,1.0,,95-48-7,mp 31 C
-A,Phenolic + Furanoid,Phenolic,Catechol,Catechol,catechol,C6H6O2,110.112,1.8,5.863192182410423,1.0,430.0,solid,1.0,,120-80-9,
-A,Phenolic + Furanoid,Phenolic,2-Methoxy-4-methylphenol (= creosol),Creosol,creosol,C8H10O2,138.166,1.8,5.863192182410423,1.092,,liquid,1.0,,93-51-6,
-A,Phenolic + Furanoid,Phenolic,Phenol,Phenol,phenol,C6H6O,94.113,2.7,8.794788273615636,1.0,84.0,solid,1.0,,108-95-2,
-A,Phenolic + Furanoid,Phenolic,Eugenol + isoeugenol,"Eucalyptol (1,8-cineole)",eucalyptol,C10H18O,154.253,0.5,1.6286644951140061,0.9225,,liquid,1.0,,470-82-6,"Eugenol unavailable -> eucalyptol substituted; ETHER, not a phenol; mp 1.5 C"
-A,Phenolic + Furanoid,Furanoid,2-furfural + 3-furfural + other HCO2,2-furfural,furfural,C5H4O2,96.085,2.9,9.446254071661237,1.16,,liquid,1.0,,98-01-1,
-A,Phenolic + Furanoid,Furanoid,5-methyl-furfural,5-methyl-furfural,methylfurfural,C6H6O2,110.112,1.8,5.863192182410423,1.11,,liquid,1.0,,620-02-0,
-A,Phenolic + Furanoid,Furanoid,2-furanmethanol + other HCO2,2-furanmethanol,furfuryl_alcohol,C5H6O2,98.101,1.7,5.537459283387622,1.13,,liquid,1.0,,98-00-0,
-A,Phenolic + Furanoid,Furanoid,2-(3H)Furanone,2(3H)-Furanone,furanone,C4H4O2,84.074,3.5,11.400651465798045,1.209,,liquid,1.0,,20825-71-2,maybe not enough available at FZJ
-A,Phenolic + Furanoid,Furanoid,Furan,Furan,furan,C4H4O,68.075,2.6,8.469055374592834,0.94,,liquid,1.0,,110-00-9,volatility risk (bp 31 C)
-A,Phenolic + Furanoid,Furanoid,5-(hydroxymethyl)-2-furfural,5-(hydroxymethyl)-2-furfural,hmf,C6H6O3,126.111,2.8,9.120521172638435,1.0,10.0,solid,1.0,,67-47-0,
-A,Phenolic + Furanoid,Furanoid,2-methylfuran + 3-methylfuran + general HCO,2-methylfuran,methylfuran,C5H6O,82.102,1.6,5.2117263843648205,0.91,,liquid,1.0,,534-22-5,
-A,Phenolic + Furanoid,Furanoid,"2,5-dimethyl furan + 2-ethylfuran + other C2 furans","2,5-dimethylfuran",dimethylfuran,C6H8O,96.129,1.0,3.2573289902280123,0.905,,liquid,1.0,,625-86-5,
-B,Hydrocarbon,,Monoterpenes,a-pinene,a_pinene,C10H16,136.238,4.4,49.410443571027514,0.858,,liquid,1.0,,80-56-8,looking for monoterpene with enough available
-B,Hydrocarbon,,Benzene,benzene,benzene,C6H6,78.114,1.3,14.5985401459854,0.876,,liquid,1.0,,71-43-2,
-B,Hydrocarbon,,Toluene,Toluene,toluene,C7H8,92.141,1.4,15.721504772599658,0.867,,liquid,1.0,,108-88-3,
-B,Hydrocarbon,,Isoprene,Isoprene,isoprene,C5H8,68.119,0.8,8.983717012914093,0.681,,liquid,1.0,,78-79-5,
-B,Hydrocarbon,,Ethyl Benzene,Ethyl Benzene,ethylbenzene,C8H10,106.168,0.05,0.5614823133071308,0.87,,liquid,1.0,,100-41-4,
-B,Hydrocarbon,,M+P Xylene,m-xylene,m_xylene,C8H10,106.168,0.34,3.8180797304884893,0.868,,liquid,1.0,,108-38-3,
-B,Hydrocarbon,,O-xylene,o-xylene,o_xylene,C8H10,106.168,0.115,1.2914093206064008,0.88,,liquid,1.0,,95-47-6,
-B,Hydrocarbon,,Sesquiterpenes,b-caryophyllene,caryophyllene,C15H24,204.357,0.5,5.614823133071307,0.91,,liquid,1.0,,87-44-5,mp ~25 C
-C,Oxygenate (carbonyls),,Methanol,Methanol,methanol,CH4O,32.042,4.2,20.740740740740744,0.79,,liquid,1.0,,67-56-1,
-C,Oxygenate (carbonyls),,Acetaldehyde,Acetaldehyde,acetaldehyde,C2H4O,44.053,3.6,17.77777777777778,0.784,,liquid,1.0,,75-07-0,
-C,Oxygenate (carbonyls),,Acrolein,Acrolein,acrolein,C3H4O,56.064,3.0,14.814814814814813,0.84,,liquid,1.0,,107-02-8,
-C,Oxygenate (carbonyls),,Methyl Acetate,Methyl Acetate,methyl_acetate,C3H6O2,74.079,0.864706,4.270153086419753,0.934,,liquid,1.0,,79-20-9,
-C,Oxygenate (carbonyls),,Hydroxy Acetone,Hydroxy Acetone,hydroxyacetone,C3H6O2,74.079,1.235294,6.100217283950617,1.08,,liquid,1.0,,116-09-6,
-C,Oxygenate (carbonyls),,"2,3-butanedione + methyl acrylate + other HCO2","2,3-butanedione",butanedione,C4H6O2,86.09,1.7,8.395061728395062,0.983,,liquid,1.0,,431-03-8,
-C,Oxygenate (carbonyls),,Acetone,Acetone,acetone,C3H6O,58.08,1.6,7.901234567901234,0.79,,liquid,1.0,,67-64-1,
-C,Oxygenate (carbonyls),,MVK,MVK,mvk,C4H6O,70.091,0.624,3.0814814814814815,0.83,,liquid,1.0,,78-94-4,
-C,Oxygenate (carbonyls),,MACR,MACR,macr,C4H6O,70.091,0.247,1.219753086419753,0.83,,liquid,1.0,,78-85-3,
-C,Oxygenate (carbonyls),,Crotonaldehyde,Crotonaldehyde,crotonaldehyde,C4H6O,70.091,0.429,2.1185185185185187,0.85,,liquid,1.0,,123-73-9,
-C,Oxygenate (carbonyls),,Pyruvaldehyde (=methyl glyoxal),Methyl Glyoxal,methylglyoxal,C3H4O2,72.063,1.15,5.679012345679012,1.046,,liquid,0.4,,78-98-8,reagent is 40% in H2O
-C,Oxygenate (carbonyls),,Methyl methacrylate + other HCO2,Methyl methacrylate,methyl_methacrylate,C5H8O2,100.117,0.6,2.962962962962963,0.94,,liquid,1.0,,80-62-6,borrowed from JCNS-1
-C,Oxygenate (carbonyls),,Acetonitrile,acetonitrile,acetonitrile,C2H3N,41.053,0.5,2.4691358024691357,0.786,,liquid,1.0,,75-05-8,
-C,Oxygenate (carbonyls),,MEK + butanal + 2-methylpropanal,MEK,mek,C4H8O,72.107,0.5,2.4691358024691357,0.805,,liquid,1.0,,78-93-3,
-D,Oxygenate (acids),,Acetic Acid,Acetic Acid,acetic_acid,C2H4O2,60.052,5.829,73.05426745206167,1.05,,liquid,1.0,,64-19-7,
-D,Oxygenate (acids),,Formic Acid,Formic Acid,formic_acid,CH2O2,46.025,1.0,12.532898859506206,1.22,,liquid,1.0,,64-18-6,
-D,Oxygenate (acids),,acrylic acid,Acrylic acid,acrylic_acid,C3H4O2,72.063,1.15,14.412833688432134,1.051,,liquid,1.0,,79-10-7,mp 13 C; polymerizes (use inhibited stock)
+A,Phenolic + Furanoid,Phenolic,Guaiacol (=2-methoxyphenol),Guaiacol,guaiacol,C7H8O2,124.139,3.9,12.703583061889248,1.112,23.0,solid,1.0,2.98e-11,90-05-1,
+A,Phenolic + Furanoid,Phenolic,2-Methylphenol (=o-cresol) + anisol,o-Cresol,o_cresol,C7H8O,108.14,2.1,6.840390879478828,1.05,25.0,liquid,1.0,4.113e-11,95-48-7,mp 31 C
+A,Phenolic + Furanoid,Phenolic,Catechol,Catechol,catechol,C6H6O2,110.112,1.8,5.863192182410423,1.0,430.0,solid,1.0,2.322e-11,120-80-9,
+A,Phenolic + Furanoid,Phenolic,2-Methoxy-4-methylphenol (= creosol),Creosol,creosol,C8H10O2,138.166,1.8,5.863192182410423,1.092,,liquid,1.0,3.975e-11,93-51-6,
+A,Phenolic + Furanoid,Phenolic,Phenol,Phenol,phenol,C6H6O,94.113,2.7,8.794788273615636,1.0,84.0,solid,1.0,2.8e-12,108-95-2,
+A,Phenolic + Furanoid,Phenolic,Eugenol + isoeugenol,"Eucalyptol (1,8-cineole)",eucalyptol,C10H18O,154.253,0.5,1.6286644951140061,0.9225,,liquid,1.0,1.11e-11,470-82-6,"Eugenol unavailable -> eucalyptol substituted; ETHER, not a phenol; mp 1.5 C"
+A,Phenolic + Furanoid,Furanoid,2-furfural + 3-furfural + other HCO2,2-furfural,furfural,C5H4O2,96.085,2.9,9.446254071661237,1.16,,liquid,1.0,3.742e-11,98-01-1,
+A,Phenolic + Furanoid,Furanoid,5-methyl-furfural,5-methyl-furfural,methylfurfural,C6H6O2,110.112,1.8,5.863192182410423,1.11,,liquid,1.0,5.183e-11,620-02-0,
+A,Phenolic + Furanoid,Furanoid,2-furanmethanol + other HCO2,2-furanmethanol,furfuryl_alcohol,C5H6O2,98.101,1.7,5.537459283387622,1.13,,liquid,1.0,1.04e-10,98-00-0,
+A,Phenolic + Furanoid,Furanoid,2-(3H)Furanone,2(3H)-Furanone,furanone,C4H4O2,84.074,3.5,11.400651465798045,1.209,,liquid,1.0,5.658e-11,20825-71-2,maybe not enough available at FZJ
+A,Phenolic + Furanoid,Furanoid,Furan,Furan,furan,C4H4O,68.075,2.6,8.469055374592834,0.94,,liquid,1.0,4.9e-11,110-00-9,volatility risk (bp 31 C)
+A,Phenolic + Furanoid,Furanoid,5-(hydroxymethyl)-2-furfural,5-(hydroxymethyl)-2-furfural,hmf,C6H6O3,126.111,2.8,9.120521172638435,1.0,10.0,solid,1.0,5.343e-11,67-47-0,
+A,Phenolic + Furanoid,Furanoid,2-methylfuran + 3-methylfuran + general HCO,2-methylfuran,methylfuran,C5H6O,82.102,1.6,5.2117263843648205,0.91,,liquid,1.0,7.31e-11,534-22-5,
+A,Phenolic + Furanoid,Furanoid,"2,5-dimethyl furan + 2-ethylfuran + other C2 furans","2,5-dimethylfuran",dimethylfuran,C6H8O,96.129,1.0,3.2573289902280123,0.905,,liquid,1.0,1.299e-10,625-86-5,
+B,Hydrocarbon,,Monoterpenes,a-pinene,a_pinene,C10H16,136.238,4.4,49.410443571027514,0.858,,liquid,1.0,5.253e-11,80-56-8,looking for monoterpene with enough available
+B,Hydrocarbon,,Benzene,benzene,benzene,C6H6,78.114,1.3,14.5985401459854,0.876,,liquid,1.0,1.216e-12,71-43-2,
+B,Hydrocarbon,,Toluene,Toluene,toluene,C7H8,92.141,1.4,15.721504772599658,0.867,,liquid,1.0,5.633e-12,108-88-3,
+B,Hydrocarbon,,Isoprene,Isoprene,isoprene,C5H8,68.119,0.8,8.983717012914093,0.681,,liquid,1.0,9.994e-11,78-79-5,
+B,Hydrocarbon,,Ethyl Benzene,Ethyl Benzene,ethylbenzene,C8H10,106.168,0.05,0.5614823133071308,0.87,,liquid,1.0,7e-12,100-41-4,
+B,Hydrocarbon,,M+P Xylene,m-xylene,m_xylene,C8H10,106.168,0.34,3.8180797304884893,0.868,,liquid,1.0,2.3e-11,108-38-3,
+B,Hydrocarbon,,O-xylene,o-xylene,o_xylene,C8H10,106.168,0.115,1.2914093206064008,0.88,,liquid,1.0,1.4e-11,95-47-6,
+B,Hydrocarbon,,Sesquiterpenes,b-caryophyllene,caryophyllene,C15H24,204.357,0.5,5.614823133071307,0.91,,liquid,1.0,1.97e-10,87-44-5,mp ~25 C
+C,Oxygenate (carbonyls),,Methanol,Methanol,methanol,CH4O,32.042,4.2,20.740740740740744,0.79,,liquid,1.0,9.112e-13,67-56-1,
+C,Oxygenate (carbonyls),,Acetaldehyde,Acetaldehyde,acetaldehyde,C2H4O,44.053,3.6,17.77777777777778,0.784,,liquid,1.0,1.496e-11,75-07-0,
+C,Oxygenate (carbonyls),,Acrolein,Acrolein,acrolein,C3H4O,56.064,3.0,14.814814814814813,0.84,,liquid,1.0,2e-11,107-02-8,
+C,Oxygenate (carbonyls),,Methyl Acetate,Methyl Acetate,methyl_acetate,C3H6O2,74.079,0.864706,4.270153086419753,0.934,,liquid,1.0,3.475e-13,79-20-9,
+C,Oxygenate (carbonyls),,Hydroxy Acetone,Hydroxy Acetone,hydroxyacetone,C3H6O2,74.079,1.235294,6.100217283950617,1.08,,liquid,1.0,2.694e-12,116-09-6,
+C,Oxygenate (carbonyls),,"2,3-butanedione + methyl acrylate + other HCO2","2,3-butanedione",butanedione,C4H6O2,86.09,1.7,8.395061728395062,0.983,,liquid,1.0,2.04e-13,431-03-8,
+C,Oxygenate (carbonyls),,Acetone,Acetone,acetone,C3H6O,58.08,1.6,7.901234567901234,0.79,,liquid,1.0,1.752e-13,67-64-1,
+C,Oxygenate (carbonyls),,MVK,MVK,mvk,C4H6O,70.091,0.624,3.0814814814814815,0.83,,liquid,1.0,2.014e-11,78-94-4,
+C,Oxygenate (carbonyls),,MACR,MACR,macr,C4H6O,70.091,0.247,1.219753086419753,0.83,,liquid,1.0,2.863e-11,78-85-3,
+C,Oxygenate (carbonyls),,Crotonaldehyde,Crotonaldehyde,crotonaldehyde,C4H6O,70.091,0.429,2.1185185185185187,0.85,,liquid,1.0,1.34e-10,123-73-9,
+C,Oxygenate (carbonyls),,Pyruvaldehyde (=methyl glyoxal),Methyl Glyoxal,methylglyoxal,C3H4O2,72.063,1.15,5.679012345679012,1.046,,liquid,0.4,1.5e-11,78-98-8,reagent is 40% in H2O
+C,Oxygenate (carbonyls),,Methyl methacrylate + other HCO2,Methyl methacrylate,methyl_methacrylate,C5H8O2,100.117,0.6,2.962962962962963,0.94,,liquid,1.0,1.834e-11,80-62-6,borrowed from JCNS-1
+C,Oxygenate (carbonyls),,Acetonitrile,acetonitrile,acetonitrile,C2H3N,41.053,0.5,2.4691358024691357,0.786,,liquid,1.0,2.2e-14,75-05-8,
+C,Oxygenate (carbonyls),,MEK + butanal + 2-methylpropanal,MEK,mek,C4H8O,72.107,0.5,2.4691358024691357,0.805,,liquid,1.0,1.109e-12,78-93-3,
+D,Oxygenate (acids),,Acetic Acid,Acetic Acid,acetic_acid,C2H4O2,60.052,5.829,73.05426745206167,1.05,,liquid,1.0,6.22e-13,64-19-7,
+D,Oxygenate (acids),,Formic Acid,Formic Acid,formic_acid,CH2O2,46.025,1.0,12.532898859506206,1.22,,liquid,1.0,5.12e-13,64-18-6,
+D,Oxygenate (acids),,acrylic acid,Acrylic acid,acrylic_acid,C3H4O2,72.063,1.15,14.412833688432134,1.051,,liquid,1.0,9.725e-12,79-10-7,mp 13 C; polymerizes (use inhibited stock)
 ,Gases,,Propene,Propene,propene,C3H6,42.081,2.9,,,,gas,1.0,2.63e-11,115-07-1,
 ,Gases,,ethene,Ethene,ethene,C2H4,28.054,1.9,,,,gas,1.0,8.5e-12,74-85-1,
 ,Gases,,acetylene,acetylene,acetylene,C2H2,26.038,1.3,,,,gas,1.0,7.8e-13,74-86-2,

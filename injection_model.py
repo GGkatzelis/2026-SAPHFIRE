@@ -19,6 +19,7 @@ placeholders flagged needs_review until you confirm them.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -26,7 +27,23 @@ import numpy as np
 import pandas as pd
 
 R = 8.314462618  # J / (mol K)
+K_B = 1.380649e-23  # J / K
+MFC_SIZES = (0.5, 5.0, 20.0)  # available MFC full-scale flows (LPM)
+# Hardware constraint: some MFCs must run at a FIXED setpoint (% of full scale)
+# rather than being auto-sized. UPDATE HERE when the constraint changes.
+# Currently: the 20 LPM MFC is restricted to 40%.
+MFC_FIXED_SETPOINT = {20.0: 40.0}
 CONFIG_DIR = Path(__file__).with_name("config")
+
+
+def carbon_count(formula) -> int:
+    """Number of carbon atoms in a molecular formula (0 if none)."""
+    if not isinstance(formula, str):
+        return 0
+    for el, n in re.findall(r"([A-Z][a-z]?)(\d*)", formula):
+        if el == "C":
+            return int(n) if n else 1
+    return 0
 
 SOLUTION_NAMES = {"A": "Phenolic + Furanoid", "B": "Hydrocarbon",
                   "C": "Oxygenate (carbonyls)", "D": "Oxygenate (acids)"}
@@ -43,6 +60,15 @@ class Chamber:
     def n_air(self) -> float:
         """Total moles of air in the chamber."""
         return self.pressure_Pa * self.volume_m3 / (R * self.temperature_K)
+
+    @property
+    def number_density(self) -> float:
+        """Air number density (molecules per cm^3)."""
+        return self.pressure_Pa / (K_B * self.temperature_K) / 1e6
+
+    def oh_reactivity(self, ppb: float, k_oh: float) -> float:
+        """OH reactivity (s^-1) of `ppb` of a species with rate constant k_oh."""
+        return k_oh * ppb * 1e-9 * self.number_density
 
     def ppb_from_mass(self, mass_g: float, mw: float) -> float:
         return (mass_g / mw) / self.n_air * 1e9
@@ -179,6 +205,34 @@ class InjectionPlanner:
             raise ValueError(f"unknown dosing method: {method}")
         n_species = n_mix * conc_ppm * 1e-6
         return self.chamber.ppb_from_moles(n_species)
+
+    def size_mfc(self, target_ppb: float, conc_ppm: float, *, corr: float = 1.0,
+                 target_minutes: float = 0.75, mfc: float | None = None,
+                 min_setpoint: float = 10.0) -> dict | None:
+        """Pick an MFC + setpoint (% of full scale) so the injection takes about
+        `target_minutes` (default 0.75 min ≈ 45 s).
+
+        `corr` is the MFC gas-correction factor (delivered flow = air setpoint ×
+        corr), since the MFCs are calibrated for air. The MFC setpoint is in
+        air-equivalent units (what you dial), the delivered gas flow includes corr.
+        """
+        if conc_ppm <= 0 or target_ppb <= 0 or corr <= 0:
+            return None
+        rate1 = self.gas_ppb_from_dosing(conc_ppm, method="flow_time",
+                                         flow_sccm=1000.0, minutes=1.0)  # ppb/min per LPM gas
+        flow_gas = target_ppb / (rate1 * target_minutes)   # LPM of gas for target time
+        setpoint_air = flow_gas / corr                     # MFC air-equivalent flow (LPM)
+        full = (mfc if mfc is not None
+                else next((m for m in MFC_SIZES if setpoint_air <= m), MFC_SIZES[-1]))
+        if full in MFC_FIXED_SETPOINT:                     # hardware-constrained MFC
+            sp, fixed = MFC_FIXED_SETPOINT[full], True
+        else:                                              # auto-size to target time
+            sp, fixed = max(min_setpoint, min(100.0, setpoint_air / full * 100.0)), False
+        flow_actual = full * (sp / 100.0) * corr           # LPM gas delivered
+        rate = rate1 * flow_actual
+        return {"mfc_LPM": full, "setpoint_pct": sp, "fixed_setpoint": fixed,
+                "gas_flow_sccm": flow_actual * 1000.0, "ppb_per_min": rate,
+                "time_s": target_ppb / rate * 60.0 if rate > 0 else float("inf")}
 
     def gas_dose_for_ppb(self, target_ppb: float, conc_ppm: float) -> dict:
         """Injection amounts needed to reach `target_ppb` for a cylinder gas.

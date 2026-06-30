@@ -120,6 +120,27 @@ FINGERPRINT = [
     _c("gas", "", "acetylene", "acetylene", "acetylene", "C2H2", 1.3, None, None, "gas", "74-86-2", k_oh=7.8e-13),
 ]
 
+# OH rate constants (cm^3 molec^-1 s^-1, 298 K) from R. Wegener's reactivity
+# calc (out/*.txt). Eucalyptol from literature 1,8-cineole. Acetonitrile uses the
+# literature value (Robert's 3.0e-11 appears to be a typo; true ~2.2e-14).
+K_OH = {
+    "guaiacol": 2.980e-11, "o_cresol": 4.113e-11, "catechol": 2.322e-11,
+    "creosol": 3.975e-11, "phenol": 2.800e-12, "eucalyptol": 1.110e-11,
+    "furfural": 3.742e-11, "methylfurfural": 5.183e-11, "furfuryl_alcohol": 1.040e-10,
+    "furanone": 5.658e-11, "furan": 4.900e-11, "hmf": 5.343e-11,
+    "methylfuran": 7.310e-11, "dimethylfuran": 1.299e-10,
+    "a_pinene": 5.253e-11, "benzene": 1.216e-12, "toluene": 5.633e-12,
+    "isoprene": 9.994e-11, "ethylbenzene": 7.000e-12, "m_xylene": 2.300e-11,
+    "o_xylene": 1.400e-11, "caryophyllene": 1.970e-10,
+    "methanol": 9.112e-13, "acetaldehyde": 1.496e-11, "acrolein": 2.000e-11,
+    "methyl_acetate": 3.475e-13, "hydroxyacetone": 2.694e-12, "butanedione": 2.040e-13,
+    "acetone": 1.752e-13, "mvk": 2.014e-11, "macr": 2.863e-11,
+    "crotonaldehyde": 1.340e-10, "methylglyoxal": 1.500e-11,
+    "methyl_methacrylate": 1.834e-11, "acetonitrile": 2.200e-14, "mek": 1.109e-12,
+    "acetic_acid": 6.220e-13, "formic_acid": 5.120e-13, "acrylic_acid": 9.725e-12,
+    "propene": 2.630e-11, "ethene": 8.500e-12, "acetylene": 7.800e-13,
+}
+
 # Per-solution preparation settings: vial/batch volume (mL) and prep notes.
 SOLUTION_PREP = {
     "A": (10.0, "Furan is volatile — prepare/seal carefully."),
@@ -134,6 +155,7 @@ GAS_BOTTLES = ["propene", "ethene", "acetylene", "no", "no2", "hono", "co"]
 def _df() -> pd.DataFrame:
     df = pd.DataFrame(FINGERPRINT)
     df["MW_g_per_mol"] = df["formula"].map(formula_mw)
+    df["k_oh_298"] = df["key"].map(K_OH)            # OH rate consts for all compounds
     df["mixture"] = df["solution"].map(lambda s: SOLUTION_NAMES.get(s, "Gases"))
     # within-solution mass fraction (liquids only; gases have no mixture share)
     df["mixture_mass_pct"] = float("nan")

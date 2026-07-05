@@ -25,13 +25,19 @@ state (OSc, Kroll 2011) and volatility log₁₀C\* (Li et al. 2016), then draws
 
 | Tab | Plot |
 |---|---|
-| 📈 Timeline | Ion time series (+ Σ all ions), pick ions or top-N |
+| 📈 Timeline & masks | Ion time series (pick ions / top-N) **and** the period controls: define the background & chemistry windows, SNR threshold, and what period + mass set the composition plots use. This one tab drives the rest. |
+| 🔬 Signal & clusters | How many masses are **real signal** (SNR) above the background, and HCA of co-evolving masses |
 | 🧱 Carbon–oxygen | Signal vs carbon number, stacked by oxygen number and by CHO(N) family |
 | 🫧 VBS | Volatility basis set: log₁₀C\* vs OSc, sized by signal, coloured by family |
 | 🎯 Mass defect | Neutral mass defect vs mass, coloured by family |
-| 🔬 Signal & clusters | Background vs chemistry masks → how many masses are **real signal** (SNR), and HCA of co-evolving masses |
 | 🎬 Animation | Time-evolving 2×2 chemical space exported as MP4/GIF |
 | 🔎 Peak table | Assigned ions + properties (CSV download) |
+
+The **period is chosen once** in *Timeline & masks* (Chemistry window / All data /
+Background), with an optional "real-signal masses only" filter, and the
+composition, VBS and mass-defect panels all follow that choice — so they focus on
+the chemistry that matters. There is no global time slider (it forced a full
+recompute on every change).
 
 ### Signal & clusters (detection + patterns)
 Define a **background** window and a **chemistry** window on the Σ-signal

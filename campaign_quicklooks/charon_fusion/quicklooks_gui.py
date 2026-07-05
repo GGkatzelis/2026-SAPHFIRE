@@ -107,16 +107,23 @@ unit_label = st.sidebar.text_input("Signal unit label", value="signal (a.u.)")
 tbl = assign(tuple(data.mz.tolist()), tol_mda, max_ppm, int(max_N),
              ov_path or "", ov_path or "")
 
-# ── time window ──────────────────────────────────────────────────────────
+# ── whole-record mean (header + defaults) ────────────────────────────────
 t0, t1 = data.times[0].to_pydatetime(), data.times[-1].to_pydatetime()
-win = st.sidebar.slider("Time window", min_value=t0, max_value=t1, value=(t0, t1),
-                        format="MM-DD HH:mm")
-conc = data.window_mean(pd.Timestamp(win[0]), pd.Timestamp(win[1]))
+conc_all = data.window_mean()
+
+
+def _mask_mean(mask):
+    """Clipped mean signal over the selected time rows (falls back to all data)."""
+    mask = np.asarray(mask, dtype=bool)
+    if mask.any():
+        return np.clip(data.values[mask].mean(axis=0), 0, None)
+    return conc_all
+
 
 # ── header / assignment summary ──────────────────────────────────────────
 st.title("CHARON-FUSION quicklooks 🔥")
 n_asg = int(tbl["assigned"].sum())
-sig_expl = 100 * conc[tbl["assigned"].to_numpy()].sum() / max(conc.sum(), 1e-9)
+sig_expl = 100 * conc_all[tbl["assigned"].to_numpy()].sum() / max(conc_all.sum(), 1e-9)
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Ions", f"{data.n_ions}")
 c2.metric("Assigned", f"{n_asg}  ({100*n_asg/data.n_ions:.0f}%)")
@@ -127,62 +134,33 @@ st.caption(f"Source: `{Path(src).name}`" + (f"  ·  sheet `{_sheet}`" if _sheet 
            f"  ·  {data.times[0]:%Y-%m-%d %H:%M} → {data.times[-1]:%Y-%m-%d %H:%M} UTC  ·  "
            f"m/z {data.mz.min():.2f}–{data.mz.max():.2f}")
 
-tab_tl, tab_co, tab_vbs, tab_md, tab_stats, tab_anim, tab_tbl = st.tabs(
-    ["📈 Timeline", "🧱 Carbon–oxygen", "🫧 VBS", "🎯 Mass defect",
-     "🔬 Signal & clusters", "🎬 Animation", "🔎 Peak table"])
+tab_tl, tab_stats, tab_co, tab_vbs, tab_md, tab_anim, tab_tbl = st.tabs(
+    ["📈 Timeline & masks", "🔬 Signal & clusters", "🧱 Carbon–oxygen",
+     "🫧 VBS", "🎯 Mass defect", "🎬 Animation", "🔎 Peak table"])
 
-# ── timeline ─────────────────────────────────────────────────────────────
+# ── 1. Timeline & masks (the control centre for what the other tabs use) ──
 with tab_tl:
-    order = np.argsort(conc)[::-1]
+    order = np.argsort(conc_all)[::-1]
     labels_all = [(f"m/z {data.mz[j]:.3f}"
                    + (f"  ({tbl.loc[j,'formula']})" if tbl.loc[j, "assigned"] else "")) for j in range(data.n_ions)]
-    default_sel = order[:8].tolist()
     colL, colR = st.columns([3, 1])
     with colR:
         show_total = st.checkbox("Show Σ all ions", value=True)
         log_y = st.checkbox("Log y-axis", value=False)
         n_top = st.slider("Quick-pick top-N ions", 0, 20, 8)
-    picks = st.multiselect(
-        "Ions to plot", options=list(range(data.n_ions)),
-        default=order[:n_top].tolist(),
-        format_func=lambda j: labels_all[j])
-    sel = picks if picks else default_sel
+    picks = st.multiselect("Ions to plot", options=list(range(data.n_ions)),
+                           default=order[:n_top].tolist(), format_func=lambda j: labels_all[j])
+    sel = picks if picks else order[:8].tolist()
     lab = [tbl.loc[j, "formula"] if tbl.loc[j, "assigned"] else f"m/z {data.mz[j]:.2f}" for j in sel]
-    fig = ql_plots.plot_timeline(data.times, data.values, data.mz, selected_idx=sel,
-                                 labels=lab, show_total=show_total, log_y=log_y,
-                                 unit_label=unit_label)
-    st.pyplot(fig, width="stretch")
+    st.pyplot(ql_plots.plot_timeline(data.times, data.values, data.mz, selected_idx=sel,
+                                     labels=lab, show_total=show_total, log_y=log_y,
+                                     unit_label=unit_label), width="stretch")
 
-# ── carbon-oxygen ────────────────────────────────────────────────────────
-with tab_co:
-    st.caption("Window-mean signal, assigned ions only. Left: stacked by oxygen "
-               "number; right: stacked by CHO(N) family.")
-    st.pyplot(ql_plots.plot_c_o(tbl, conc, unit_label=f"Σ {unit_label}",
-                                max_err_mda=max_err), width="stretch")
-
-# ── VBS ──────────────────────────────────────────────────────────────────
-with tab_vbs:
-    st.caption("Volatility basis set — Li et al. (2016) log₁₀(C*) vs Kroll (2011) "
-               "carbon oxidation state. Marker size ∝ window-mean signal.")
-    st.pyplot(ql_plots.plot_vbs(tbl, conc, unit_label=unit_label, max_err_mda=max_err),
-              width="content")
-
-# ── mass defect ──────────────────────────────────────────────────────────
-with tab_md:
-    st.caption("Neutral mass defect (mass − nominal) coloured by family — separates "
-               "CH / CHO / CHON series.")
-    st.pyplot(ql_plots.plot_mass_defect(tbl, conc, unit_label=unit_label, max_err_mda=max_err),
-              width="content")
-
-# ── signal detection & clustering ────────────────────────────────────────
-def _render_signal_clusters():
-    st.caption(f"How many of the {data.n_ions} masses carry **real signal** above the "
-               "background, and which ones **co-evolve**? Define a background and a "
-               "chemistry window below; detection and clustering are computed "
-               "relative to the background.")
-
+    st.divider()
+    st.markdown("#### Period masks — background vs chemistry")
+    st.caption("Define the two windows once here; the Signal & clusters analysis and "
+               "the composition/VBS/mass-defect plots all use them.")
     total = np.clip(data.values, 0, None).sum(axis=1)
-    # default windows: BG = first flat stretch; chemistry = from the first rise to end
     thr = 0.30 * total.max()
     rise = int(np.argmax(total >= thr)) if (total >= thr).any() else int(0.2 * data.n_times)
     bg_end_default = data.times[max(int(0.08 * data.n_times), 1)].to_pydatetime()
@@ -193,24 +171,42 @@ def _render_signal_clusters():
                        value=(t0, bg_end_default), format="MM-DD HH:mm", key="bg_win")
     chem_win = m2.slider("Chemistry window", min_value=t0, max_value=t1,
                          value=(chem_start_default, t1), format="MM-DD HH:mm", key="chem_win")
-    snr_thr = st.slider("SNR threshold (real signal if enhancement / σ_bg ≥)",
+    snr_thr = st.slider("SNR threshold — a mass is 'real signal' if enhancement / σ_bg ≥",
                         1.0, 10.0, 3.0, 0.5)
-
     bg_mask = np.asarray((data.times >= pd.Timestamp(bg_win[0])) & (data.times <= pd.Timestamp(bg_win[1])))
     chem_mask = np.asarray((data.times >= pd.Timestamp(chem_win[0])) & (data.times <= pd.Timestamp(chem_win[1])))
+    st.pyplot(stats_plots.plot_period_timeline(data.times, total, bg_mask, chem_mask), width="stretch")
 
-    st.pyplot(stats_plots.plot_period_timeline(data.times, total, bg_mask, chem_mask),
-              width="stretch")
+    st.divider()
+    st.markdown("#### Data used by the composition / VBS / mass-defect plots")
+    pc1, pc2 = st.columns([2, 3])
+    period = pc1.radio("Period", ["Chemistry window", "All data", "Background window"], index=0)
+    real_only = pc2.checkbox("Real-signal masses only (SNR ≥ threshold)", value=True,
+                             help="Restrict the composition plots to masses that pass detection, "
+                                  "so they focus on the chemistry that matters.")
 
-    if bg_mask.sum() < 2 or chem_mask.sum() < 1:
-        st.warning("Background needs ≥2 points and chemistry ≥1 point — widen the windows.")
-        return
+# ── shared detection + the concentration vector the plots consume ────────
+masks_valid = bool(bg_mask.sum() >= 2 and chem_mask.sum() >= 1)
+det = (stats.detection_stats(data.values, bg_mask, chem_mask, data.mz,
+                             snr_threshold=snr_thr, prop_table=tbl) if masks_valid else None)
 
-    det = stats.detection_stats(data.values, bg_mask, chem_mask, data.mz,
-                                snr_threshold=snr_thr, prop_table=tbl)
+conc_period = {"All data": conc_all,
+               "Background window": _mask_mean(bg_mask),
+               "Chemistry window": _mask_mean(chem_mask)}[period]
+if real_only and det is not None:
+    conc_used = conc_period * det["detected"].to_numpy()
+else:
+    conc_used = conc_period
+_scope = period + (" · real-signal masses only" if (real_only and det is not None) else "") + "  (set in Timeline & masks)"
+
+
+# ── 2. Signal detection & clustering ─────────────────────────────────────
+def _render_signal_clusters(det):
     n_det = int(det["detected"].sum())
     chem_tot = det["chem_mean"].clip(lower=0).sum()
     sig_frac = 100 * det.loc[det["detected"], "chem_mean"].clip(lower=0).sum() / max(chem_tot, 1e-9)
+    st.caption(f"Real signal is judged relative to the background window "
+               f"(SNR ≥ {snr_thr:g}); windows are set in the Timeline & masks tab.")
     d1, d2, d3 = st.columns(3)
     d1.metric("Real-signal masses", f"{n_det} / {data.n_ions}")
     d2.metric("… fraction of masses", f"{100*n_det/data.n_ions:.0f}%")
@@ -220,18 +216,15 @@ def _render_signal_clusters():
     s1.pyplot(stats_plots.plot_snr_hist(det, snr_thr), width="stretch")
     s2.pyplot(stats_plots.plot_enhancement_scatter(det), width="stretch")
 
-    # ── clustering (detected masses, whole-record correlation) ───────────
     st.markdown("#### Pattern clustering (HCA)")
     detected_idx = np.where(det["detected"].to_numpy())[0]
     if len(detected_idx) < 3:
         st.info("Fewer than 3 detected masses — lower the SNR threshold to cluster.")
         return
-
     cc1, cc2 = st.columns(2)
     cap = cc1.slider("Max masses in heatmap (top by enhancement)",
                      20, min(600, len(detected_idx)), min(250, len(detected_idx)), 10)
     n_clusters = cc2.slider("Number of clusters", 2, 12, 6)
-    # cap to top-N by enhancement for a readable heatmap
     order_by_enh = detected_idx[np.argsort(det["enhancement"].to_numpy()[detected_idx])[::-1]]
     use_idx = np.sort(order_by_enh[:cap])
     if len(use_idx) < len(detected_idx):
@@ -241,11 +234,9 @@ def _render_signal_clusters():
     labels, leaf_order, _ = stats.cluster_masses(corr, n_clusters=n_clusters)
     summary = stats.cluster_summary(det, use_idx, labels)
     profiles = stats.cluster_profiles(data.values, use_idx, labels, normalize="max")
-
     h1, h2 = st.columns(2)
     h1.pyplot(stats_plots.plot_corr_heatmap(corr, leaf_order, labels, mz=data.mz), width="content")
     h2.pyplot(stats_plots.plot_cluster_profiles(data.times, profiles, summary), width="stretch")
-
     st.dataframe(summary, width="stretch")
     assign_tbl = det.iloc[use_idx].copy()
     assign_tbl["cluster"] = labels
@@ -255,10 +246,32 @@ def _render_signal_clusters():
 
 
 with tab_stats:
-    _render_signal_clusters()
+    if det is None:
+        st.warning("Set a Background window (≥2 points) and a Chemistry window (≥1 point) "
+                   "in the **Timeline & masks** tab.")
+    else:
+        _render_signal_clusters(det)
 
+# ── 3. carbon-oxygen ─────────────────────────────────────────────────────
+with tab_co:
+    st.caption(f"Composition — {_scope}. Left: stacked by oxygen number; right: by CHO(N) family.")
+    st.pyplot(ql_plots.plot_c_o(tbl, conc_used, unit_label=f"Σ {unit_label}",
+                                max_err_mda=max_err), width="stretch")
 
-# ── animation ────────────────────────────────────────────────────────────
+# ── 4. VBS ───────────────────────────────────────────────────────────────
+with tab_vbs:
+    st.caption(f"Volatility basis set — Li et al. (2016) log₁₀(C*) vs Kroll (2011) OSc. "
+               f"Marker size ∝ signal · {_scope}.")
+    st.pyplot(ql_plots.plot_vbs(tbl, conc_used, unit_label=unit_label, max_err_mda=max_err),
+              width="content")
+
+# ── 5. mass defect ───────────────────────────────────────────────────────
+with tab_md:
+    st.caption(f"Neutral mass defect (mass − nominal) coloured by family · {_scope}.")
+    st.pyplot(ql_plots.plot_mass_defect(tbl, conc_used, unit_label=unit_label, max_err_mda=max_err),
+              width="content")
+
+# ── 6. animation ─────────────────────────────────────────────────────────
 with tab_anim:
     st.caption("Render the chemical-space evolution over the experiment "
                "(2×2: timeline · VBS · carbon–oxygen · mass defect).")
@@ -275,38 +288,34 @@ with tab_anim:
                                    "over the whole experiment.")
     fmt = st.radio("Format", ["mp4", "gif"], horizontal=True)
     if st.button("🎬 Render animation", type="primary"):
-        order = np.argsort(conc)[::-1]
-        sel = order[:8].tolist()
-        lab = [tbl.loc[j, "formula"] if tbl.loc[j, "assigned"] else f"m/z {data.mz[j]:.2f}" for j in sel]
+        vsel = np.argsort(conc_all)[::-1][:8].tolist()
+        vlab = [tbl.loc[j, "formula"] if tbl.loc[j, "assigned"] else f"m/z {data.mz[j]:.2f}" for j in vsel]
         out = Path(tempfile.gettempdir()) / f"charon_chemspace.{fmt}"
         bar = st.progress(0.0, text="Rendering frames…")
         try:
             video.render_chemspace_video(out, data, tbl, n_frames=n_frames, fps=fps,
                                          window_pts=window_pts, max_err_mda=max_err,
-                                         unit_label=unit_label, selected_idx=sel, labels=lab,
+                                         unit_label=unit_label, selected_idx=vsel, labels=vlab,
                                          co_ymax=(co_ymax or None),
                                          progress=lambda f: bar.progress(min(f, 1.0),
                                                                          text=f"Rendering… {f*100:.0f}%"))
             bar.empty()
-            if fmt == "mp4":
-                st.video(str(out))
-            else:
-                st.image(str(out))
+            (st.video if fmt == "mp4" else st.image)(str(out))
             st.download_button(f"⬇ Download {fmt}", data=out.read_bytes(),
                                file_name=f"charon_chemspace.{fmt}", mime=f"video/{fmt}")
         except Exception as e:
             bar.empty()
             st.error(f"Render failed: {e}")
 
-# ── peak table ───────────────────────────────────────────────────────────
+# ── 7. peak table ────────────────────────────────────────────────────────
 with tab_tbl:
     show = tbl.copy()
-    show["window_signal"] = conc
-    show = show[show["assigned"]].sort_values("window_signal", ascending=False)
-    st.caption("Assigned ions with derived properties (window-mean signal). "
+    show["signal"] = conc_period
+    show = show[show["assigned"]].sort_values("signal", ascending=False)
+    st.caption(f"Assigned ions with derived properties (signal over: {period}). "
                "Download to review or seed an override table.")
     st.dataframe(show[["mz", "formula", "C", "H", "O", "N", "OC", "HC", "osc",
-                       "logc", "klass", "err_mDa", "source", "window_signal"]],
+                       "logc", "klass", "err_mDa", "source", "signal"]],
                  width="stretch", height=460)
     st.download_button("⬇ Download peak table (CSV)", show.to_csv(index=False).encode(),
                        file_name="charon_peak_table.csv", mime="text/csv")

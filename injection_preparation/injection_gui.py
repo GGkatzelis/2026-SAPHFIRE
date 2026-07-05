@@ -22,6 +22,11 @@ from __future__ import annotations
 
 import io
 import math
+import sys
+from pathlib import Path
+
+# Ensure sibling modules import regardless of the working directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pandas as pd
 import streamlit as st
@@ -139,8 +144,12 @@ with inc[2]:
     inc_co = st.checkbox("CO", value=True, key="inc_co")
     inc_noy = [sp for sp in NOY_SPECIES
                if st.checkbox(sp.upper(), value=True, key=f"noy_{sp}")]
-    no2_surrogate = st.checkbox("⤷ NO₂ surrogate for NO (nighttime)", value=False,
-                                key="no2_surrogate")
+    nox_mode = st.radio(
+        "NOx injection", ["Speciated (NO/NO₂/HONO)", "All NOx → NO₂ (nighttime)",
+                          "All NOx → NO (NO₂ low)"], key="nox_mode",
+        help="Speciated = the 70/20/10 NO/NO₂/HONO split. NO/NO₂ interconvert, so "
+             "you can inject all NOx as NO₂ (nighttime, NO+O₃→NO₂) or all as NO "
+             "(if the NO₂ bottle is low). HONO is unchanged either way.")
     inc_o3 = st.checkbox("O₃ (from generator)", value=False, key="inc_o3")
 
 # --- compute the scenario --------------------------------------------------- #
@@ -156,13 +165,19 @@ co_ppb = planner.co_from_voc(total_voc)["co_ppb"] if inc_co else 0.0
 noy_total = total_voc * planner.noy_voc_ratio(mce)
 spec = planner.noy_params["noy_speciation"]
 noy_ppb = {sp: noy_total * spec[sp] for sp in inc_noy}
-# Nighttime: NO + O3 -> NO2, so inject the NO fraction directly as NO2 (1:1 mole).
-if no2_surrogate and "no" in noy_ppb:
-    no_folded = noy_ppb.pop("no")
-    noy_ppb["no2"] = noy_ppb.get("no2", 0.0) + no_folded
-    st.info(f"NO₂ surrogate ON (nighttime): NO ({no_folded:.1f} ppb) injected as NO₂ "
-            f"→ NO₂ = {noy_ppb['no2']:.1f} ppb. Total NOy unchanged; pair with O₃ for "
+# NO/NO2 interconvert, so optionally fold one into the other (mole-for-mole).
+if nox_mode == "All NOx → NO₂ (nighttime)" and "no" in noy_ppb:
+    folded = noy_ppb.pop("no")
+    noy_ppb["no2"] = noy_ppb.get("no2", 0.0) + folded
+    st.info(f"NO₂ surrogate (nighttime): NO ({folded:.1f} ppb) injected as NO₂ → "
+            f"NO₂ = {noy_ppb['no2']:.1f} ppb. Total NOy unchanged; pair with O₃ for "
             f"NO₃ chemistry.")
+elif nox_mode == "All NOx → NO (NO₂ low)" and "no2" in noy_ppb:
+    folded = noy_ppb.pop("no2")
+    noy_ppb["no"] = noy_ppb.get("no", 0.0) + folded
+    st.info(f"NO surrogate (NO₂ bottle low): NO₂ ({folded:.1f} ppb) injected as NO → "
+            f"NO = {noy_ppb['no']:.1f} ppb. Total NOy unchanged; NO/NO₂ interconvert "
+            f"in daylight.")
 
 
 # Build ppb and mass (mg) slices for both pies. Mass uses m = ppb·1e-9·n_air·MW.
@@ -449,15 +464,19 @@ with st.expander("📐 Equations — gas-phase injection (for verification)"):
     st.markdown("• **MFC air-calibration factor $f$** — MFCs read in air units, so the "
                 "real gas flow is $S\\cdot f$ (e.g. CO 0.963, ethene 1.022; from the "
                 "SAPHIR LCU). Editable per gas in the input table.")
-    st.markdown("• **Auto-sizing** — smallest MFC + setpoint (≥10%) chosen so the time "
-                "matches your target. *Constraint: the 20 LPM MFC is fixed at 40% "
-                "(hardware limit) — its time follows from that.*")
+    st.markdown("• **Auto-sizing** — smallest of the **0.5 / 5 LPM** MFCs + setpoint "
+                "(≥10%) chosen so the time matches your target. If the 5 LPM at 100% "
+                "would exceed ~10 min it caps at 5 LPM/100%; the **20 LPM MFC is only "
+                "used as a last resort** (and is fixed at 40%).")
     st.markdown("• **Propene surrogate** (acetylene → propene, OH-reactivity-matched):")
     st.latex(r"\mathrm{ppb}_\mathrm{propene}\;\mathrel{+}=\;"
              r"\frac{k_\mathrm{OH}^\mathrm{acetylene}}{k_\mathrm{OH}^\mathrm{propene}}\,"
              r"\mathrm{ppb}_\mathrm{acetylene}")
-    st.markdown("• **NO₂ surrogate** (nighttime, NO + O₃ → NO₂, mole-for-mole):")
-    st.latex(r"\mathrm{ppb}_{\mathrm{NO_2}}\;\mathrel{+}=\;\mathrm{ppb}_{\mathrm{NO}}")
+    st.markdown("• **NOx surrogate** — NO/NO₂ interconvert, so fold one into the other "
+                "mole-for-mole (nighttime → NO₂, or → NO if the NO₂ bottle is low):")
+    st.latex(r"\mathrm{ppb}_{\mathrm{NO_2}}\mathrel{+}=\mathrm{ppb}_{\mathrm{NO}}"
+             r"\quad\text{or}\quad"
+             r"\mathrm{ppb}_{\mathrm{NO}}\mathrel{+}=\mathrm{ppb}_{\mathrm{NO_2}}")
     st.markdown("⚠️ **Reference-temperature caveat** — flow volumes are referenced at "
                 f"the MFC standard ({planner.sccm_ref_T:.2f} K); the SAPHIR LCU uses "
                 "~298 K, a ~9% difference, pending confirmation of the MFC reference.")

@@ -8,3 +8,4 @@ REM (each old server keeps holding its port, leaving the browser on a stale one)
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -match 'injection_gui' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 "%VENV%\streamlit.exe" run injection_gui.py
 pause
+

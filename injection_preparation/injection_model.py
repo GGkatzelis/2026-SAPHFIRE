@@ -208,13 +208,13 @@ class InjectionPlanner:
 
     def size_mfc(self, target_ppb: float, conc_ppm: float, *, corr: float = 1.0,
                  target_minutes: float = 0.75, mfc: float | None = None,
-                 min_setpoint: float = 10.0) -> dict | None:
+                 min_setpoint: float = 10.0, max_min_before_20lpm: float = 10.0) -> dict | None:
         """Pick an MFC + setpoint (% of full scale) so the injection takes about
         `target_minutes` (default 0.75 min ≈ 45 s).
 
-        `corr` is the MFC gas-correction factor (delivered flow = air setpoint ×
-        corr), since the MFCs are calibrated for air. The MFC setpoint is in
-        air-equivalent units (what you dial), the delivered gas flow includes corr.
+        Prefers the 0.5 and 5 LPM MFCs; the 20 LPM MFC is used ONLY when even the
+        5 LPM at 100% would be slower than `max_min_before_20lpm`. `corr` is the
+        MFC gas-correction factor (delivered flow = air setpoint × corr).
         """
         if conc_ppm <= 0 or target_ppb <= 0 or corr <= 0:
             return None
@@ -222,8 +222,17 @@ class InjectionPlanner:
                                          flow_sccm=1000.0, minutes=1.0)  # ppb/min per LPM gas
         flow_gas = target_ppb / (rate1 * target_minutes)   # LPM of gas for target time
         setpoint_air = flow_gas / corr                     # MFC air-equivalent flow (LPM)
-        full = (mfc if mfc is not None
-                else next((m for m in MFC_SIZES if setpoint_air <= m), MFC_SIZES[-1]))
+        if mfc is not None:
+            full = mfc
+        elif setpoint_air <= 0.5:
+            full = 0.5
+        elif setpoint_air <= 5.0:
+            full = 5.0
+        else:
+            # exceeds 5 LPM at the target time -> stay on 5 LPM (at 100%) unless
+            # that is slower than the threshold, then fall back to the 20 LPM.
+            time_5_full = target_ppb / (rate1 * 5.0 * corr)   # minutes at 5 LPM, 100%
+            full = 5.0 if time_5_full <= max_min_before_20lpm else 20.0
         if full in MFC_FIXED_SETPOINT:                     # hardware-constrained MFC
             sp, fixed = MFC_FIXED_SETPOINT[full], True
         else:                                              # auto-size to target time

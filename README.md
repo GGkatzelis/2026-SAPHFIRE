@@ -17,10 +17,17 @@ injection_preparation\run_planner.bat
 ```
 (or `…\.venv\Scripts\streamlit.exe run injection_preparation\injection_gui.py`)
 
-### [`campaign_quicklooks/`](campaign_quicklooks/) — instrument quicklooks 🚧
-Post-campaign data quicklooks, per instrument. First target: **CHARON-FUSION**
-(mass-spec HDF5 per experiment) — mass-spec timelines, carbon–oxygen /
-Van Krevelen distributions, and VBS (volatility) plots. In development.
+### [`campaign_quicklooks/`](campaign_quicklooks/) — instrument quicklooks
+Post-campaign data quicklooks, per instrument. First tool: **CHARON-FUSION**
+(`charon_fusion/`) — a Streamlit GUI that loads an IDA export (time × m/z),
+auto-assigns `[M+H]⁺` formulas from exact mass, and draws mass-spec timelines,
+carbon–oxygen distributions, VBS (volatility), mass-defect plots, and a
+chemical-space animation.
+
+Run it:
+```
+campaign_quicklooks\charon_fusion\run_quicklooks.bat
+```
 
 ### [`publications/`](publications/) — reference papers
 Open-access ACP papers behind the parameterizations (Gkatzelis 2024, Roberts 2020).

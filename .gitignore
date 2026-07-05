@@ -11,3 +11,6 @@ __pycache__/
 # Office temp/lock files and scratch
 ~$*
 _tmp_*
+
+# CHARON-FUSION quicklooks parquet cache (regenerated from the IDA export)
+campaign_quicklooks/**/.cache/

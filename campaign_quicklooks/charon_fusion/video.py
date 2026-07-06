@@ -111,6 +111,23 @@ def render_chemspace_video(out_path, data, prop_table, *, n_frames=120, fps=12,
         co_max = max(co_max, ql_plots.co_max_height(prop_table, v, max_err_mda=max_err_mda))
     co_limit = co_ymax if co_ymax else (co_max * 1.05 if co_max > 0 else None)
 
+    # fixed axes / legends across frames (computed over the full assigned set) so
+    # everything but the data stays static and the viewer can follow smoothly
+    from .chemistry import CLASS_ORDER
+    spc_all = ql_plots.species_with_conc(prop_table, np.ones(prop_table.shape[0]),
+                                         max_err_mda=max_err_mda)
+    if not spc_all.empty:
+        x_carbon = sorted(spc_all["C"].unique())
+        max_o = int(spc_all["O"].max())
+        classes = [c for c in CLASS_ORDER if c in spc_all["klass"].values]
+        m_lo, m_hi = float(spc_all["mass"].min()), float(spc_all["mass"].max())
+        md_all = spc_all["mass"] - spc_all["mass"].round()
+        md_pad = max(0.05, 0.1 * (float(md_all.max()) - float(md_all.min())))
+        mass_xlim = (m_lo - 5, m_hi + 5)
+        md_ylim = (float(md_all.min()) - md_pad, float(md_all.max()) + md_pad)
+    else:
+        x_carbon = max_o = classes = mass_xlim = md_ylim = None
+
     is_gif = out_path.lower().endswith(".gif")
     if is_gif:
         writer = imageio.get_writer(out_path, mode="I", duration=1.0 / fps, loop=0)
@@ -127,11 +144,15 @@ def render_chemspace_video(out_path, data, prop_table, *, n_frames=120, fps=12,
             tstamp = data.times[int(c)]
             ts_rgb = _resize(ts_cursor(tstamp), COL_W, ROW_H)
             f_vbs = ql_plots.plot_vbs(prop_table, conc, unit_label=unit_label,
-                                      max_err_mda=max_err_mda, size_ref=size_ref, figsize=_FIGSIZE)
+                                      max_err_mda=max_err_mda, size_ref=size_ref,
+                                      classes=classes, show_n=False, figsize=_FIGSIZE)
             f_co = ql_plots.plot_c_o(prop_table, conc, unit_label=f"Σ {unit_label}",
-                                     max_err_mda=max_err_mda, ymax=co_limit, figsize=_FIGSIZE)
+                                     max_err_mda=max_err_mda, ymax=co_limit,
+                                     x_carbon=x_carbon, max_o=max_o, families=classes, figsize=_FIGSIZE)
             f_md = ql_plots.plot_mass_defect(prop_table, conc, unit_label=unit_label,
-                                             max_err_mda=max_err_mda, size_ref=size_ref, figsize=_FIGSIZE)
+                                             max_err_mda=max_err_mda, size_ref=size_ref,
+                                             classes=classes, show_n=False,
+                                             xlim=mass_xlim, ylim=md_ylim, figsize=_FIGSIZE)
 
             top = np.hstack([ts_rgb, _resize(_fig_rgb(f_vbs), COL_W, ROW_H)])
             bot = np.hstack([_resize(_fig_rgb(f_co), COL_W, ROW_H),

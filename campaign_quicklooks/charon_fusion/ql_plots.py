@@ -92,54 +92,69 @@ def co_max_height(prop_table, conc, max_err_mda=None) -> float:
 
 
 def plot_c_o(prop_table, conc, unit_label="Σ signal (a.u.)", max_err_mda=None,
-             ymax=None, figsize=(9.5, 4.2)):
+             ymax=None, x_carbon=None, max_o=None, families=None, figsize=(9.5, 4.2)):
     """Two stacked bar plots vs carbon number: by oxygen number and by family.
 
-    ``ymax`` fixes the y-axis of both subplots (e.g. a global maximum for video)."""
+    Fixed-scale options (pass from the video to keep axes/legends static across
+    frames — only the bar heights change):
+      * ``ymax``    — fix the y-axis of both subplots.
+      * ``x_carbon``— fix the carbon-number axis to this list.
+      * ``max_o``   — fix the oxygen-number legend/colours to 0..max_o.
+      * ``families``— fix the family legend to this ordered list.
+    """
     fig = plt.figure(figsize=figsize)
     gs = fig.add_gridspec(1, 2, wspace=0.28)
     ax_no = fig.add_subplot(gs[0])
     ax_cl = fig.add_subplot(gs[1])
 
+    static = x_carbon is not None
     spc = species_with_conc(prop_table, conc, max_err_mda=max_err_mda)
-    if spc.empty:
+    if spc.empty and not static:
         for ax in (ax_no, ax_cl):
             ax.text(0.5, 0.5, "No assigned signal in window.", ha="center",
                     va="center", transform=ax.transAxes, color="grey")
             ax.set_axis_off()
         return fig
 
-    x_all = sorted(spc["C"].unique())
+    x_all = list(x_carbon) if static else sorted(spc["C"].unique())
+    if not x_all:
+        x_all = [0]
+    zeros = np.zeros(len(x_all))
 
     # left: stacked by nO
-    grp_no = spc.groupby(["C", "O"])["val"].sum().unstack(fill_value=0).reindex(x_all, fill_value=0)
-    n_levels = sorted(grp_no.columns)
+    grp_no = (spc.groupby(["C", "O"])["val"].sum().unstack(fill_value=0).reindex(x_all, fill_value=0)
+              if not spc.empty else pd.DataFrame(index=x_all))
+    top_o = max_o if max_o is not None else (int(max(grp_no.columns)) if len(grp_no.columns) else 0)
     cmap = plt.get_cmap("viridis")
-    bottoms = np.zeros(len(x_all))
-    for no in n_levels:
-        vals = grp_no[no].values
-        ax_no.bar(x_all, vals, bottom=bottoms, color=cmap(no / max(max(n_levels), 1)),
-                  edgecolor="k", linewidth=0.3, label=f"{int(no)}")
-        bottoms += vals
+    bottoms = zeros.copy()
+    for no in range(0, top_o + 1):
+        vals = grp_no[no].values if no in grp_no.columns else zeros
+        ax_no.bar(x_all, vals, bottom=bottoms, color=cmap(no / max(top_o, 1)),
+                  edgecolor="k", linewidth=0.3, label=f"{no}")
+        bottoms = bottoms + vals
     ax_no.set_xlabel("Carbon number (nC)", fontsize=9)
     ax_no.set_ylabel(unit_label, fontsize=9)
     ax_no.set_title("Stacked by oxygen number", fontsize=9)
     ax_no.set_xticks(x_all)
     ax_no.grid(True, axis="y", ls="--", alpha=0.35)
-    if n_levels:
-        ax_no.legend(fontsize=6, loc="upper right", ncol=2, framealpha=0.85,
-                     title="nO", title_fontsize=7)
+    ax_no.legend(fontsize=6, loc="upper right", ncol=2, framealpha=0.85,
+                 title="nO", title_fontsize=7)
 
     # right: stacked by family
-    grp_cl = spc.groupby(["C", "klass"])["val"].sum().unstack(fill_value=0).reindex(x_all, fill_value=0)
-    bottoms = np.zeros(len(x_all))
-    for cls in CLASS_ORDER:
-        if cls not in grp_cl.columns:
+    fam_levels = list(families) if families is not None else CLASS_ORDER
+    grp_cl = (spc.groupby(["C", "klass"])["val"].sum().unstack(fill_value=0).reindex(x_all, fill_value=0)
+              if not spc.empty else pd.DataFrame(index=x_all))
+    bottoms = zeros.copy()
+    for cls in fam_levels:
+        if cls not in CLASS_COLORS:
             continue
-        vals = grp_cl[cls].values
+        present = cls in grp_cl.columns
+        if not present and not static:
+            continue
+        vals = grp_cl[cls].values if present else zeros
         ax_cl.bar(x_all, vals, bottom=bottoms, color=CLASS_COLORS[cls],
                   edgecolor="k", linewidth=0.3, label=cls)
-        bottoms += vals
+        bottoms = bottoms + vals
     ax_cl.set_xlabel("Carbon number (nC)", fontsize=9)
     ax_cl.set_ylabel(unit_label, fontsize=9)
     ax_cl.set_title("Stacked by CHO(N) family", fontsize=9)
@@ -157,14 +172,27 @@ def plot_c_o(prop_table, conc, unit_label="Σ signal (a.u.)", max_err_mda=None,
     return fig
 
 
+def _family_legend(ax, classes, loc):
+    from matplotlib.lines import Line2D
+    handles = [Line2D([0], [0], marker="o", color="w", markerfacecolor=CLASS_COLORS[c],
+                      markersize=8, label=c) for c in CLASS_ORDER if c in classes]
+    if handles:
+        ax.legend(handles=handles, loc=loc, fontsize=8, framealpha=0.85)
+
+
 # ── 3. volatility basis set ──────────────────────────────────────────────
 def plot_vbs(prop_table, conc, unit_label="signal (a.u.)", max_err_mda=None,
-             size_ref=None, figsize=(6.4, 5.2)):
-    """log10(C*) vs OSc scatter, circles sized/coloured by concentration/family."""
+             size_ref=None, classes=None, show_n=True, figsize=(6.4, 5.2)):
+    """log10(C*) vs OSc scatter, circles sized/coloured by concentration/family.
+
+    ``classes`` fixes the family legend and ``show_n=False`` drops the changing
+    species count from the title — pass both from the video so only the points
+    move while axes, ticks and legend stay put."""
     fig, ax = plt.subplots(figsize=figsize)
+    static = classes is not None
     spc = species_with_conc(prop_table, conc, max_err_mda=max_err_mda)
     spc = spc[np.isfinite(spc["logc"]) & np.isfinite(spc["osc"])]
-    if spc.empty:
+    if spc.empty and not static:
         ax.text(0.5, 0.5, "No organic species with valid LogC* in window.",
                 ha="center", va="center", transform=ax.transAxes, color="grey")
         ax.set_axis_off()
@@ -176,10 +204,11 @@ def plot_vbs(prop_table, conc, unit_label="signal (a.u.)", max_err_mda=None,
     for x, label in [(-2, "LVOC"), (1, "SVOC"), (4.5, "IVOC"), (8.5, "VOC")]:
         ax.text(x, 2.25, label, ha="center", va="bottom", fontsize=9, color="#444")
 
-    sizes = _sizes(spc["val"].values, ref=size_ref)
-    colors = [CLASS_COLORS.get(c, "#7f7f7f") for c in spc["klass"]]
-    ax.scatter(spc["logc"], spc["osc"], s=sizes, c=colors, alpha=0.55,
-               edgecolors="k", linewidths=0.4, zorder=2)
+    if not spc.empty:
+        sizes = _sizes(spc["val"].values, ref=size_ref)
+        colors = [CLASS_COLORS.get(c, "#7f7f7f") for c in spc["klass"]]
+        ax.scatter(spc["logc"], spc["osc"], s=sizes, c=colors, alpha=0.55,
+                   edgecolors="k", linewidths=0.4, zorder=2)
 
     ax.set_xlim(-4, 11)
     ax.set_ylim(-2.5, 2.5)
@@ -187,14 +216,11 @@ def plot_vbs(prop_table, conc, unit_label="signal (a.u.)", max_err_mda=None,
     ax.set_xticklabels([str(x) if x % 2 == 0 else "" for x in range(-3, 12)])
     ax.set_xlabel(r"Volatility  $\log_{10}(C^*)$  [µg m$^{-3}$]", fontsize=9)
     ax.set_ylabel(r"Carbon oxidation state  $\overline{\mathrm{OS}}_\mathrm{C}$", fontsize=9)
-    ax.set_title(f"Volatility basis set  (N={len(spc)}, sized by {unit_label})",
-                 fontsize=10, fontweight="bold")
+    title = "Volatility basis set" + (f"  (N={len(spc)}, sized by {unit_label})"
+                                      if show_n else f"  (sized by {unit_label})")
+    ax.set_title(title, fontsize=10, fontweight="bold")
 
-    from matplotlib.lines import Line2D
-    handles = [Line2D([0], [0], marker="o", color="w", markerfacecolor=CLASS_COLORS[c],
-                      markersize=8, label=c) for c in CLASS_ORDER if c in spc["klass"].values]
-    if handles:
-        ax.legend(handles=handles, loc="lower right", fontsize=8, framealpha=0.85)
+    _family_legend(ax, classes if classes is not None else spc["klass"].unique(), "lower right")
     ax.grid(True, ls="--", alpha=0.3)
     ax.text(0.01, -0.13, _CITE, transform=ax.transAxes, fontsize=6, color="#666", style="italic")
     fig.subplots_adjust(left=0.12, right=0.96, top=0.90, bottom=0.13)
@@ -203,33 +229,40 @@ def plot_vbs(prop_table, conc, unit_label="signal (a.u.)", max_err_mda=None,
 
 # ── 4. mass defect ───────────────────────────────────────────────────────
 def plot_mass_defect(prop_table, conc, unit_label="signal (a.u.)", max_err_mda=None,
-                     size_ref=None, figsize=(6.4, 5.2)):
-    """Mass defect (mass - round(mass)) vs mass, sized/coloured by family."""
+                     size_ref=None, classes=None, show_n=True, xlim=None, ylim=None,
+                     figsize=(6.4, 5.2)):
+    """Mass defect (mass - round(mass)) vs mass, sized/coloured by family.
+
+    ``classes``/``show_n``/``xlim``/``ylim`` fix the legend, title and axes for a
+    static video (only the points move)."""
     fig, ax = plt.subplots(figsize=figsize)
+    static = classes is not None or xlim is not None
     spc = species_with_conc(prop_table, conc, max_err_mda=max_err_mda)
     spc = spc[np.isfinite(spc["mass"])]
-    if spc.empty:
+    if spc.empty and not static:
         ax.text(0.5, 0.5, "No assigned signal in window.", ha="center",
                 va="center", transform=ax.transAxes, color="grey")
         ax.set_axis_off()
         return fig
 
-    md = spc["mass"] - np.round(spc["mass"])
-    sizes = _sizes(spc["val"].values, ref=size_ref)
-    colors = [CLASS_COLORS.get(c, "#7f7f7f") for c in spc["klass"]]
-    ax.scatter(spc["mass"], md, s=sizes, c=colors, alpha=0.55,
-               edgecolors="k", linewidths=0.4, zorder=2)
+    if not spc.empty:
+        md = spc["mass"] - np.round(spc["mass"])
+        sizes = _sizes(spc["val"].values, ref=size_ref)
+        colors = [CLASS_COLORS.get(c, "#7f7f7f") for c in spc["klass"]]
+        ax.scatter(spc["mass"], md, s=sizes, c=colors, alpha=0.55,
+                   edgecolors="k", linewidths=0.4, zorder=2)
     ax.axhline(0, color="0.6", lw=0.7, ls="--")
     ax.set_xlabel("Neutral mass (u)", fontsize=9)
     ax.set_ylabel("Mass defect (u)", fontsize=9)
-    ax.set_title(f"Mass defect  (N={len(spc)}, sized by {unit_label})",
-                 fontsize=10, fontweight="bold")
+    if xlim:
+        ax.set_xlim(xlim)
+    if ylim:
+        ax.set_ylim(ylim)
+    title = "Mass defect" + (f"  (N={len(spc)}, sized by {unit_label})"
+                             if show_n else f"  (sized by {unit_label})")
+    ax.set_title(title, fontsize=10, fontweight="bold")
 
-    from matplotlib.lines import Line2D
-    handles = [Line2D([0], [0], marker="o", color="w", markerfacecolor=CLASS_COLORS[c],
-                      markersize=8, label=c) for c in CLASS_ORDER if c in spc["klass"].values]
-    if handles:
-        ax.legend(handles=handles, loc="upper left", fontsize=8, framealpha=0.85)
+    _family_legend(ax, classes if classes is not None else spc["klass"].unique(), "upper left")
     ax.grid(True, ls="--", alpha=0.3)
     fig.subplots_adjust(left=0.12, right=0.96, top=0.90, bottom=0.12)
     return fig

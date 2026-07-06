@@ -545,13 +545,14 @@ st.header("Export")
 # (1) Expected ppb + ppbC + OH reactivity per compound (from species_df, which
 # already reflects the included items, propene surrogate, regime CO/NOy).
 expected_ppb_df = species_df[["compound", "group", "MW_g_per_mol", "ppb", "carbon",
-                              "ppbC", "OH_reactivity_s-1", "note"]].rename(
-    columns={"ppb": "expected_ppb"})
+                              "ppbC", "k_oh", "OH_reactivity_s-1", "note"]].rename(
+    columns={"ppb": "expected_ppb", "k_oh": "k_OH_cm3_molec-1_s-1"})
 if inc_o3 and o3_target > 0:
     expected_ppb_df = pd.concat([expected_ppb_df, pd.DataFrame([{
         "compound": "O3", "group": "Oxidant (generator)", "MW_g_per_mol": 48.0,
         "expected_ppb": o3_target, "carbon": 0, "ppbC": 0.0,
-        "OH_reactivity_s-1": 0.0, "note": "from O3 generator"}])], ignore_index=True)
+        "k_OH_cm3_molec-1_s-1": 0.0, "OH_reactivity_s-1": 0.0,
+        "note": "from O3 generator"}])], ignore_index=True)
 
 # Per-mixture totals (ppb, ppbC, OH reactivity) for the export.
 mixture_totals = species_df.groupby("group", as_index=False).agg(
@@ -567,7 +568,9 @@ mixtures_uL = res["per_solution"][[
         "sum_ppb": "solution_sum_ppb"})
 
 st.markdown("**Expected chamber concentration per compound**")
-st.dataframe(fmt(expected_ppb_df, 3), hide_index=True)
+_exp_fmt = {c: "{:.3f}" for c in expected_ppb_df.select_dtypes("number").columns}
+_exp_fmt["k_OH_cm3_molec-1_s-1"] = "{:.2e}"
+st.dataframe(expected_ppb_df.style.format(_exp_fmt, na_rep="—"), hide_index=True)
 st.caption("Gas-phase ppb carry a ~9% reference-temperature caveat vs the SAPHIR "
            "LCU (0 °C vs ~25 °C) until we align the MFC reference.")
 

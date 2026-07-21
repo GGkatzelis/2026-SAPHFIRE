@@ -14,3 +14,8 @@ _tmp_*
 
 # CHARON-FUSION quicklooks parquet cache (regenerated from the IDA export)
 campaign_quicklooks/**/.cache/
+
+# CHARON-FUSION raw experiment data (large .h5/.xlsx exports — keep out of git)
+campaign_quicklooks/**/Data/
+*.h5
+*.hdf5

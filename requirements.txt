@@ -9,9 +9,10 @@ streamlit
 xlrd            # read legacy .xls (SAPHIR LCU workbook)
 
 # campaign_quicklooks / charon_fusion
-h5py            # CHARON-FUSION raw h5 (future direct reader)
+h5py            # CHARON-FUSION h5 exports + raw h5
 pyarrow         # parquet cache for the IDA export
 scipy           # hierarchical clustering (signal & clusters panel)
+plotly          # interactive (zoom/pan) timeline
 imageio         # chemical-space animation frames
 imageio-ffmpeg  # mp4 encoding for imageio
 pillow          # frame compositing (usually pulled in by matplotlib)

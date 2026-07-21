@@ -87,7 +87,10 @@ def load_timeseries(path, sheet: str | None = None, use_cache: bool = True) -> C
         return _read_excel(path, sheet=sheet, use_cache=use_cache)
     if ext in (".csv", ".txt", ".tsv"):
         return _read_csv(path)
-    raise ValueError(f"Unsupported export format '{ext}'. Supported: .xlsx/.xls/.csv/.txt/.tsv. "
+    if ext in (".h5", ".hdf5"):
+        return _read_h5(path)
+    raise ValueError(f"Unsupported export format '{ext}'. Supported: "
+                     ".xlsx/.xls/.csv/.txt/.tsv/.h5/.hdf5. "
                      "Add a reader in charon_io.load_timeseries for new formats.")
 
 
@@ -144,6 +147,85 @@ def _read_csv(path: Path) -> CharonData:
     raw = pd.read_csv(path, sep=sep, engine="python")
     df = _tidy(raw)
     return _from_frame(df, str(path), {})
+
+
+# ── HDF5 reader (IDA export in .h5) ──────────────────────────────────────
+def _decode(x):
+    return x.decode("latin1") if isinstance(x, (bytes, bytearray)) else str(x)
+
+
+def _read_h5(path: Path) -> CharonData:
+    """Read an IDA HDF5 export (a 2-D time × m/z matrix + label/time vectors).
+
+    Layout seen from Tofware: a group (e.g. ``time_series``) with a 2-D float
+    ``TS`` matrix, a string ``description`` of m/z labels, and ``time_string`` /
+    ``time`` (MATLAB datenum). Axis orientation is inferred by length so the
+    exact names/order don't have to match.
+    """
+    import h5py
+
+    with h5py.File(path, "r") as f:
+        dsets: dict = {}
+        f.visititems(lambda n, o: dsets.__setitem__(n, o) if isinstance(o, h5py.Dataset) else None)
+        mats = [(n, o) for n, o in dsets.items() if o.ndim == 2 and o.dtype.kind in "fiu"]
+        if not mats:
+            raise ValueError(
+                f"'{path.name}' has no readable 2-D data matrix — the HDF5 export "
+                "looks incomplete/corrupt (no datasets under its groups). "
+                "Re-export it from the IDA/Tofware project.")
+        mname, mat = max(mats, key=lambda kv: kv[1].size)
+        nr, nc = mat.shape
+
+        def length(o):
+            return int(np.prod(o.shape))
+
+        str_ds = [(n, o) for n, o in dsets.items() if o.dtype.kind in ("S", "O", "U")]
+        num_ds = [(n, o) for n, o in dsets.items()
+                  if o.dtype.kind in "fiu" and n != mname and length(o) in (nr, nc)]
+
+        # m/z labels: a string vector whose length matches a matrix axis
+        labels = _match_length(str_ds, (nr, nc), prefer=("desc", "mz", "mass", "label", "peak"))
+        if labels is None:
+            raise ValueError(f"'{path.name}': found a data matrix but no m/z label vector.")
+        lbl_len = length(labels[1])
+        mz_axis = 0 if lbl_len == nr else 1
+        mz = np.array([_column_mz(_decode(x)) for x in labels[1][()]], dtype=float)
+
+        other = nr if mz_axis == 1 else nc
+        # time axis (the other dimension): prefer a datetime string, else numeric epoch
+        tstr = _match_length([(n, o) for n, o in str_ds
+                              if any(t in n.lower() for t in ("time", "date"))],
+                             (other,), prefer=("string", "time", "date"))
+        if tstr is not None:
+            times = pd.DatetimeIndex(pd.to_datetime(
+                [_decode(s) for s in tstr[1][()]], errors="coerce", dayfirst=True))
+        else:
+            tnum = _match_length(num_ds, (other,), prefer=("time", "date"))
+            if tnum is None:
+                raise ValueError(f"'{path.name}': found a data matrix but no time axis.")
+            times = _epoch_to_datetime(pd.Series(np.asarray(tnum[1][()]).ravel()))
+
+        values = np.asarray(mat[()])
+        if mz_axis == 0:            # rows are m/z -> orient to (time, m/z)
+            values = values.T
+
+    keep = ~np.isnan(mz)
+    df = pd.DataFrame(values[:, keep], index=times, columns=mz[keep])
+    df = df[~df.index.isna()]
+    df = df.loc[:, ~df.columns.duplicated()].sort_index()
+    return _from_frame(df, str(path), {"h5_matrix": mname})
+
+
+def _match_length(candidates, dims, prefer=()):
+    """Pick (name, dataset) whose flat length is in ``dims``; prefer name tokens."""
+    matches = [(n, o) for n, o in candidates if int(np.prod(o.shape)) in dims]
+    if not matches:
+        return None
+    if prefer:
+        for n, o in matches:
+            if any(p in n.lower() for p in prefer):
+                return (n, o)
+    return matches[0]
 
 
 # ── generic tidier: raw wide frame -> time-indexed m/z frame ─────────────
@@ -230,6 +312,8 @@ def _epoch_to_datetime(series: pd.Series) -> pd.DatetimeIndex:
                                  else pd.NaT for x in v])
     if 1e8 < med <= 2.5e9:        # Unix seconds
         return pd.to_datetime(v, unit="s", errors="coerce")
+    if 5e5 < med < 1e6:           # MATLAB datenum (719529 = 1970-01-01)
+        return pd.to_datetime(v - 719529, unit="D", errors="coerce")
     # fallback: treat as Excel serial days
     return pd.DatetimeIndex([_EXCEL_EPOCH + timedelta(days=float(x)) if np.isfinite(x)
                              else pd.NaT for x in v])

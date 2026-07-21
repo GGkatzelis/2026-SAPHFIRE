@@ -1,7 +1,8 @@
 # CHARON-FUSION quicklooks
 
-Turn a CHARON-FUSION **IDA export** (`…-IDA_Export_*.xlsx`, a time × m/z matrix)
-into the classic SAPHFIRE quicklook plots.
+Turn a CHARON-FUSION **IDA export** (a time × m/z matrix) into the classic
+SAPHFIRE quicklook plots. Reads the Tofware **HDF5** (`…IDA_Export….h5`), the
+**Excel** export (`…-IDA_Export_*.xlsx`), or CSV/TSV.
 
 ## Run
 ```
@@ -9,8 +10,10 @@ run_quicklooks.bat
 ```
 (auto-kills stale instances, then serves the GUI at http://localhost:8501)
 
-Point the sidebar at an export, e.g.
-`Z:\VOC\Campaigns\2026_SAPHFIRE\2026_07_03\20260703_FLAMING_Day-IDA_Export_woBackground.xlsx`
+In the sidebar, either **Browse folder** (pick an experiment from a directory of
+exports — defaults to this tool's `Data/` folder, override with the `CHARON_DIR`
+env var) or **File / upload** (drop a file or paste a path). If a file is an
+incomplete/corrupt export, the app says so and you just pick another.
 
 ## What it does
 The export labels every ion only by exact **m/z** (the sum-formula assignment
@@ -25,7 +28,7 @@ state (OSc, Kroll 2011) and volatility log₁₀C\* (Li et al. 2016), then draws
 
 | Tab | Plot |
 |---|---|
-| 📈 Timeline & masks | Ion time series (pick ions / top-N) **and** the period controls: define the background & chemistry windows, SNR threshold, and what period + mass set the composition plots use. This one tab drives the rest. |
+| 📈 Timeline & masks | **Interactive** (Plotly) ion time series — zoom/pan/hover, click the legend to toggle traces, search all ions by m/z or formula. Paste the **SAPHIR action log** to overlay the events as vertical markers. Define the background & chemistry windows (or snap them to the first VOC injection), the SNR threshold, and what period + mass set the composition plots use. This one tab drives the rest. |
 | 🔬 Signal & clusters | How many masses are **real signal** (SNR) above the background, and HCA of co-evolving masses |
 | 🧱 Carbon–oxygen | Signal vs carbon number, stacked by oxygen number and by CHO(N) family |
 | 🫧 VBS | Volatility basis set: log₁₀C\* vs OSc, sized by signal, coloured by family |
@@ -57,6 +60,8 @@ profiles (CSV download of the mass→cluster table).
 | `charon_io.py` | Read the IDA export (time × m/z), parquet-cached; load override tables. |
 | `chemistry.py` | [M+H]⁺ formula assignment; Li 2016 C\*, Kroll OSc, CHO(N) family (lifted from MCM_SAPHIR_Tool). |
 | `ql_plots.py` | The four matplotlib panels. |
+| `interactive.py` | Plotly zoom/pan timeline with event + period overlays. |
+| `actions.py` | Parse the pasted SAPHIR action log into timestamped events. |
 | `stats.py` | Background-vs-chemistry SNR detection, correlation, Ward HCA. |
 | `stats_plots.py` | Period-mask timeline, SNR histogram, enhancement scatter, correlation heatmap, cluster profiles. |
 | `video.py` | Off-screen imageio 2×2 animation (timeline rendered once, cursor overlaid; fixed panel scales). |
@@ -75,13 +80,15 @@ CharonData(times, mz, values, source, meta)   # T×N signal — the ONLY thing a
           (dispatch by extension)
 ```
 
-`load_timeseries(path)` dispatches on extension to a reader; each reader returns a
-`CharonData`. The generic tidier auto-detects the **time column** (by name —
-`time_number`/`time_string`/`datetime` — and infers the epoch: Excel-serial /
-Unix s / Unix ms / Igor) and the **ion columns** (`m/z 101.023 []`, `mz101.023`,
-or a bare numeric header). No experiment specifics (file name, sheet, date) are
-hard-coded — the Excel sheet is auto-detected and the path box defaults to empty
-(set the `CHARON_EXPORT` env var to prefill, or just upload/paste).
+`load_timeseries(path)` dispatches on extension to a reader (`.h5/.hdf5`, Excel,
+CSV/TSV); each returns a `CharonData`. Time is auto-detected by name
+(`time_string`/`time_number`/`datetime`) with the epoch inferred by magnitude
+(Excel-serial / Unix s / Unix ms / Igor / **MATLAB datenum**), and ion labels
+from `m/z 101.023 []`, `mz101.023`, or a bare number. The HDF5 reader finds the
+2-D matrix + label/time vectors by shape (names/orientation need not match) and
+raises a clear error if the export is incomplete/corrupt. No experiment specifics
+are hard-coded — the Excel sheet is auto-detected and the source is chosen in the
+sidebar (browse a folder or upload/paste; `CHARON_DIR`/`CHARON_EXPORT` prefill).
 
 **To add a new export format:** write one reader that returns a `CharonData`
 (reuse `_tidy` if it's a wide table) and add a branch in `load_timeseries`.

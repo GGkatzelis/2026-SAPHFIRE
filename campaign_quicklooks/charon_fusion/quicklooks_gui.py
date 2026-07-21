@@ -38,11 +38,15 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from charon_fusion import charon_io, chemistry, ql_plots, stats, stats_plots, video
+from charon_fusion import (actions, charon_io, chemistry, interactive, ql_plots,
+                           stats, stats_plots, video)
 
-# Optional convenience prefill for the path box (not required). Set the
-# CHARON_EXPORT environment variable to your usual export, or just upload / paste.
+# Optional prefills (not required). Set CHARON_EXPORT (a file) or CHARON_DIR (a
+# folder of experiments), or just upload / paste. CHARON_DIR defaults to the
+# tool's own Data/ folder.
 DEFAULT_PATH = os.environ.get("CHARON_EXPORT", "")
+DEFAULT_DIR = os.environ.get("CHARON_DIR", str(Path(__file__).resolve().parent / "Data"))
+READABLE_EXT = (".h5", ".hdf5", ".xlsx", ".xls", ".csv", ".txt", ".tsv")
 
 st.set_page_config(page_title="CHARON-FUSION quicklooks", page_icon="🔥", layout="wide")
 
@@ -70,31 +74,55 @@ st.sidebar.title("CHARON-FUSION")
 st.sidebar.caption("SAPHFIRE 2026 quicklooks")
 
 st.sidebar.markdown("**Data source**")
-upload = st.sidebar.file_uploader("Upload export (xlsx / csv / tsv)",
-                                  type=["xlsx", "xls", "csv", "txt", "tsv"])
-path = st.sidebar.text_input("…or path to an export", value=DEFAULT_PATH,
-                             help="A wide time × m/z table. Set the CHARON_EXPORT "
-                                  "env var to prefill this.")
+mode = st.sidebar.radio("Load from", ["Browse folder", "File / upload"], horizontal=True)
 
 src = None
-if upload is not None:
-    tmp = Path(tempfile.gettempdir()) / f"charon_upload_{upload.name}"
-    tmp.write_bytes(upload.getbuffer())
-    src = str(tmp)
-elif path and Path(path).exists():
-    src = path
+if mode == "Browse folder":
+    folder = st.sidebar.text_input("Experiments folder", value=DEFAULT_DIR,
+                                   help="Folder of CHARON exports (.h5 / .xlsx / .csv). "
+                                        "Set CHARON_DIR to change the default.")
+    if folder and Path(folder).is_dir():
+        files = sorted((p for p in Path(folder).iterdir()
+                        if p.suffix.lower() in READABLE_EXT),
+                       key=lambda p: p.name)
+        if files:
+            labels = [f"{p.name}   ({p.stat().st_size/1e6:.0f} MB)" for p in files]
+            i = st.sidebar.selectbox("Experiment", range(len(files)),
+                                     format_func=lambda k: labels[k])
+            src = str(files[i])
+            st.sidebar.caption(f"{len(files)} file(s) in folder")
+        else:
+            st.sidebar.warning("No .h5 / .xlsx / .csv files in that folder.")
+    elif folder:
+        st.sidebar.warning("Folder not found.")
+else:
+    upload = st.sidebar.file_uploader("Upload export (h5 / xlsx / csv / tsv)",
+                                      type=["h5", "hdf5", "xlsx", "xls", "csv", "txt", "tsv"])
+    path = st.sidebar.text_input("…or path to an export", value=DEFAULT_PATH,
+                                 help="A wide time × m/z table. Set CHARON_EXPORT to prefill.")
+    if upload is not None:
+        tmp = Path(tempfile.gettempdir()) / f"charon_upload_{upload.name}"
+        tmp.write_bytes(upload.getbuffer())
+        src = str(tmp)
+    elif path and Path(path).exists():
+        src = path
 
 if src is None:
     st.title("CHARON-FUSION quicklooks 🔥")
-    st.info("**Upload** a CHARON-FUSION export or **enter its path** in the sidebar.\n\n"
-            "Any wide *time × m/z* table works — Excel IDA exports "
-            "(`…-IDA_Export_*.xlsx`) or CSV/TSV. The time column may be "
-            "`time_number`/`time_string`/`datetime`; ion columns like "
+    st.info("**Browse a folder** of experiments or **upload / paste a path** in the sidebar.\n\n"
+            "Any wide *time × m/z* export works — Tofware IDA **HDF5** (`…IDA_Export….h5`), "
+            "**Excel** (`…-IDA_Export_*.xlsx`) or CSV/TSV. Time may be "
+            "`time_string`/`time_number`/MATLAB datenum; ion labels like "
             "`m/z 101.023 []`, `mz101.023` or a bare number.")
     st.stop()
 
 stat = Path(src).stat()
-data = load_data(src, stat.st_mtime, stat.st_size)
+try:
+    data = load_data(src, stat.st_mtime, stat.st_size)
+except Exception as e:
+    st.title("CHARON-FUSION quicklooks 🔥")
+    st.error(f"**Could not read `{Path(src).name}`.**\n\n{e}")
+    st.stop()
 
 st.sidebar.markdown("**Formula assignment** ([M+H]⁺)")
 tol_mda = st.sidebar.slider("Mass tolerance (mDa)", 2.0, 20.0, 7.0, 0.5)
@@ -140,44 +168,76 @@ tab_tl, tab_stats, tab_co, tab_vbs, tab_md, tab_anim, tab_tbl = st.tabs(
 
 # ── 1. Timeline & masks (the control centre for what the other tabs use) ──
 with tab_tl:
+    # --- experiment action log (optional) → event overlay ---------------
+    with st.expander("📋 SAPHIR action log (optional) — paste to overlay events"):
+        log_text = st.text_area(
+            "Paste the experiment log", height=150, key="action_log", label_visibility="collapsed",
+            placeholder="12:36 r M.A. CHANGE: Close Roof\n13:05 X L.M. CHANGE: Inject 16 uL Hydrocarbon solution\n...")
+        st.caption("Codes — **X** VOC · **O/D/M/c/C** ozone/NO₂/NO/CO/CO₂ · "
+                   "**R/U/V/F/H/Z/P** roof/UV/fans/flush/humid/flow/press · "
+                   "**S** seed · **Y** PLUS · **J** JULIAC · **$** comment.")
+    events = actions.parse_action_log(log_text, data.times[0]) if log_text.strip() else actions._EMPTY
+
+    # --- ion selection ---------------------------------------------------
     order = np.argsort(conc_all)[::-1]
     labels_all = [(f"m/z {data.mz[j]:.3f}"
                    + (f"  ({tbl.loc[j,'formula']})" if tbl.loc[j, "assigned"] else "")) for j in range(data.n_ions)]
-    colL, colR = st.columns([3, 1])
-    with colR:
-        show_total = st.checkbox("Show Σ all ions", value=True)
-        log_y = st.checkbox("Log y-axis", value=False)
-        n_top = st.slider("Quick-pick top-N ions", 0, 20, 8)
-    picks = st.multiselect("Ions to plot", options=list(range(data.n_ions)),
+    t1c, t2c, t3c = st.columns([1, 1, 1])
+    show_total = t1c.checkbox("Show Σ all ions", value=True)
+    log_y = t2c.checkbox("Log y-axis", value=False)
+    n_top = t3c.slider("Quick-pick top-N", 0, 30, 8)
+    picks = st.multiselect("Ions to plot — search all by m/z or formula",
+                           options=list(range(data.n_ions)),
                            default=order[:n_top].tolist(), format_func=lambda j: labels_all[j])
     sel = picks if picks else order[:8].tolist()
     lab = [tbl.loc[j, "formula"] if tbl.loc[j, "assigned"] else f"m/z {data.mz[j]:.2f}" for j in sel]
-    st.pyplot(ql_plots.plot_timeline(data.times, data.values, data.mz, selected_idx=sel,
-                                     labels=lab, show_total=show_total, log_y=log_y,
-                                     unit_label=unit_label), width="stretch")
 
-    st.divider()
-    st.markdown("#### Period masks — background vs chemistry")
-    st.caption("Define the two windows once here; the Signal & clusters analysis and "
-               "the composition/VBS/mass-defect plots all use them.")
+    # --- define background & chemistry periods ---------------------------
+    st.markdown("#### Define background & chemistry periods")
+    st.caption("These drive the Signal & clusters detection and the composition / VBS / "
+               "mass-defect plots. **Default:** background = first 8 % of the record; "
+               "chemistry = from the first rise above 30 % of the peak to the end — "
+               "override below (or snap to the first VOC injection from the log).")
     total = np.clip(data.values, 0, None).sum(axis=1)
     thr = 0.30 * total.max()
     rise = int(np.argmax(total >= thr)) if (total >= thr).any() else int(0.2 * data.n_times)
     bg_end_default = data.times[max(int(0.08 * data.n_times), 1)].to_pydatetime()
     chem_start_default = data.times[rise].to_pydatetime()
 
-    m1, m2 = st.columns(2)
-    bg_win = m1.slider("Background window", min_value=t0, max_value=t1,
-                       value=(t0, bg_end_default), format="MM-DD HH:mm", key="bg_win")
-    chem_win = m2.slider("Chemistry window", min_value=t0, max_value=t1,
-                         value=(chem_start_default, t1), format="MM-DD HH:mm", key="chem_win")
-    snr_thr = st.slider("SNR threshold — a mass is 'real signal' if enhancement / σ_bg ≥",
+    first_voc = actions.first_time(events, {"X"})
+    snap = st.checkbox("Snap the boundary to the first VOC injection (from the log)",
+                       value=False, disabled=(first_voc is None),
+                       help="Background = start → first ‘X’ event; chemistry = first ‘X’ → end.")
+    if snap and first_voc is not None:
+        b = first_voc.to_pydatetime()
+        bg_win, chem_win = (t0, b), (b, t1)
+        st.caption(f"Snapped: background = start → **{first_voc:%H:%M}** (first VOC), "
+                   f"chemistry = **{first_voc:%H:%M}** → end.")
+    else:
+        m1, m2 = st.columns(2)
+        bg_win = m1.slider("Background window", min_value=t0, max_value=t1,
+                           value=(t0, bg_end_default), format="MM-DD HH:mm", key="bg_win")
+        chem_win = m2.slider("Chemistry window", min_value=t0, max_value=t1,
+                             value=(chem_start_default, t1), format="MM-DD HH:mm", key="chem_win")
+    snr_thr = st.slider("SNR threshold — a mass is ‘real signal’ if enhancement / σ_bg ≥",
                         1.0, 10.0, 3.0, 0.5)
     bg_mask = np.asarray((data.times >= pd.Timestamp(bg_win[0])) & (data.times <= pd.Timestamp(bg_win[1])))
     chem_mask = np.asarray((data.times >= pd.Timestamp(chem_win[0])) & (data.times <= pd.Timestamp(chem_win[1])))
-    st.pyplot(stats_plots.plot_period_timeline(data.times, total, bg_mask, chem_mask), width="stretch")
 
-    st.divider()
+    # --- interactive timeline (zoom/pan/hover; click legend to toggle) ---
+    st.plotly_chart(
+        interactive.timeline_figure(data.times, data.values, data.mz, selected_idx=sel,
+                                    labels=lab, show_total=show_total, log_y=log_y,
+                                    unit_label=unit_label, events=events,
+                                    bg_win=bg_win, chem_win=chem_win),
+        width="stretch", config={"scrollZoom": True, "displaylogo": False})
+
+    if not events.empty:
+        with st.expander(f"📋 Parsed actions ({len(events)})"):
+            st.dataframe(events[["time", "code", "who", "kind", "label", "description"]],
+                         width="stretch", height=min(60 + 35 * len(events), 360))
+
+    # --- what the composition / VBS / mass-defect plots consume ----------
     st.markdown("#### Data used by the composition / VBS / mass-defect plots")
     pc1, pc2 = st.columns([2, 3])
     period = pc1.radio("Period", ["Chemistry window", "All data", "Background window"], index=0)
@@ -218,13 +278,20 @@ def _render_signal_clusters(det):
 
     st.markdown("#### Pattern clustering (HCA)")
     detected_idx = np.where(det["detected"].to_numpy())[0]
-    if len(detected_idx) < 3:
-        st.info("Fewer than 3 detected masses — lower the SNR threshold to cluster.")
+    n_det = len(detected_idx)
+    if n_det < 4:
+        st.info(f"Only {n_det} detected mass(es) — widen the chemistry window or lower "
+                "the SNR threshold to cluster (need ≥ 4).")
         return
     cc1, cc2 = st.columns(2)
-    cap = cc1.slider("Max masses in heatmap (top by enhancement)",
-                     20, min(600, len(detected_idx)), min(250, len(detected_idx)), 10)
-    n_clusters = cc2.slider("Number of clusters", 2, 12, 6)
+    max_cap = min(600, n_det)
+    if max_cap > 20:
+        cap = cc1.slider("Max masses in heatmap (top by enhancement)",
+                         20, max_cap, min(250, max_cap), 10)
+    else:
+        cap = n_det
+        cc1.caption(f"Clustering all {n_det} detected masses.")
+    n_clusters = cc2.slider("Number of clusters", 2, min(12, n_det), min(6, n_det - 1))
     order_by_enh = detected_idx[np.argsort(det["enhancement"].to_numpy()[detected_idx])[::-1]]
     use_idx = np.sort(order_by_enh[:cap])
     if len(use_idx) < len(detected_idx):

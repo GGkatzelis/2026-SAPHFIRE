@@ -151,6 +151,19 @@ SOLUTION_PREP = {
 
 GAS_BOTTLES = ["propene", "ethene", "acetylene", "no", "no2", "hono", "co"]
 
+# Standalone compounds — NOT part of the A-D fingerprint and NOT gas bottles.
+# They exist so the planner knows their properties (MW, density, k_OH) for one-off
+# experiments (e.g. a neat nonanal injection). Written to compound_properties.csv
+# ONLY, so they can never perturb the mixture mass fractions or the gas plan.
+STANDALONE = [
+    dict(key="nonanal", compound="Nonanal", formula="C9H18O", density_g_per_mL=0.827,
+         solubility_H2O_g_per_L=0.096, state_at_RT="liquid", reagent_conc=1.0,
+         k_oh_298=3.6e-11, CAS="124-19-6", purity_fraction=0.95, needs_review=False,
+         comment="standalone neat liquid injection; rho 0.823-0.827 (Sigma-Aldrich); "
+                 "k_OH 3.6(+/-0.7)e-11 measured (Atmos. Chem. of Nonanal, ES&T 2003), "
+                 "AopWin 3.31e-11; bp 191 C, VP 0.37 mmHg -> slow to evaporate, wall-sticky"),
+]
+
 
 def _df() -> pd.DataFrame:
     df = pd.DataFrame(FINGERPRINT)
@@ -185,6 +198,11 @@ def write_compound_properties(df: pd.DataFrame) -> pd.DataFrame:
     props["purity_fraction"] = 0.97
     props["enabled"] = True
     props["needs_review"] = True
+    if STANDALONE:
+        extra = pd.DataFrame(STANDALONE)
+        extra["MW_g_per_mol"] = extra["formula"].map(formula_mw)
+        extra["enabled"] = True
+        props = pd.concat([props, extra[props.columns]], ignore_index=True)
     props.to_csv(CONFIG_DIR / "compound_properties.csv", index=False)
     return props
 

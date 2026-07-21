@@ -41,3 +41,4 @@ acrylic_acid,Acrylic acid,C3H4O2,72.063,1.051,,liquid,1.0,9.725e-12,79-10-7,mp 1
 propene,Propene,C3H6,42.081,,,gas,1.0,2.63e-11,115-07-1,,0.97,True,True
 ethene,Ethene,C2H4,28.054,,,gas,1.0,8.5e-12,74-85-1,,0.97,True,True
 acetylene,acetylene,C2H2,26.038,,,gas,1.0,7.8e-13,74-86-2,,0.97,True,True
+nonanal,Nonanal,C9H18O,142.242,0.827,0.096,liquid,1.0,3.6e-11,124-19-6,"standalone neat liquid injection; rho 0.823-0.827 (Sigma-Aldrich); k_OH 3.6(+/-0.7)e-11 measured (Atmos. Chem. of Nonanal, ES&T 2003), AopWin 3.31e-11; bp 191 C, VP 0.37 mmHg -> slow to evaporate, wall-sticky",0.95,True,False

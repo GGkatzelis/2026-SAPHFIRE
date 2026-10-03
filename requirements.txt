@@ -16,3 +16,8 @@ plotly          # interactive (zoom/pan) timeline
 imageio         # chemical-space animation frames
 imageio-ffmpeg  # mp4 encoding for imageio
 pillow          # frame compositing (usually pulled in by matplotlib)
+
+# Data submission evaluation
+netCDF4         # native SAPHIR .nc submissions
+pywin32         # send reports through local Outlook
+pytest          # validator tests

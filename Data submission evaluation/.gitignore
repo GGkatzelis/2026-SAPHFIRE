@@ -1,0 +1,7 @@
+reports/
+state/
+__pycache__/
+# private (public repository): sciebo path, share link, email; and the
+# submission instructions, which contain the upload link and access code
+settings_local.py
+SAPHFIRE_2026_Data_Submission_Format.pdf

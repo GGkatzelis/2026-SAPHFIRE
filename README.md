@@ -29,6 +29,17 @@ Run it:
 campaign_quicklooks\charon_fusion\run_quicklooks.bat
 ```
 
+### [`Data submission evaluation/`](Data%20submission%20evaluation/) — submission checker
+Checks every file teams upload to the sciebo `Incoming - Upload` folder against
+the SAPHFIRE 2026 data submission rules (CSV / HDF5 / SAPHIR NetCDF + metadata)
+and emails an HTML report per upload via Outlook. Read-only on sciebo for now.
+
+Run it:
+```
+"Data submission evaluation\evaluate_incoming.bat"   (manual check)
+"Data submission evaluation\run_watcher.bat"         (watch + email)
+```
+
 ### [`publications/`](publications/) — reference papers
 Open-access ACP papers behind the parameterizations (Gkatzelis 2024, Roberts 2020).
 

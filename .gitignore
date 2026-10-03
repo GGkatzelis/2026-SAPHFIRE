@@ -19,3 +19,7 @@ campaign_quicklooks/**/.cache/
 campaign_quicklooks/**/Data/
 *.h5
 *.hdf5
+
+# Campaign experiment log / instrument status (contains the upload link and the
+# logbook; private, the repository is public). Read by Data submission evaluation/campaign.py
+SAPHFIRE 2026 - Experiments and Instrument Status.xlsx

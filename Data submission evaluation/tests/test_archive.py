@@ -112,6 +112,25 @@ def test_approve_needs_confirmation(sciebo):
     assert not p.exists() and _log()[-1]["how"] == "approved"
 
 
+def test_team_fix_list_groups_days(sciebo):
+    """Two days with the same mistake -> one team message, one item, both files named."""
+    from feedback import team_messages
+    from validator import evaluate_file
+    inc, arc = sciebo
+    (inc / "Metadata.PTRMS.FZJ.txt").write_text(META)
+    files = []
+    for day in ("2026-07-02", "2026-07-03"):
+        p = inc / f"{day}.PTRMS.FZJ.csv"
+        p.write_text(f"time_utc,mz69.069 [ppbv],C5H8 [ppbv]\n{day} 06:00:00,1.0,2.0\n")
+        files.append(p)
+    msgs = team_messages([evaluate_file(p, inc) for p in files])
+    assert len(msgs) == 1 and msgs[0].team == "PTRMS (FZJ)"
+    ion = [i for i in msgs[0].items if "ion mass" in i.title]
+    assert len(ion) == 1 and ion[0].blocking and len(ion[0].files) == 2
+    assert "Lovelace" in msgs[0].contact and "MUST BE FIXED" in msgs[0].text
+    assert "Dear" not in msgs[0].text and "Best regards" not in msgs[0].text
+
+
 def test_native_saphir_nc_to_csv(sciebo):
     import netCDF4
     import archive

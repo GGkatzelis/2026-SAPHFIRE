@@ -33,7 +33,7 @@ R8 = "Rule 8 · Metadata"
 RULE_ORDER = [LOC, R1, R2, R3, R4, R5, R6, R7, R8]
 
 STATUS_RANK = {"PASS": 0, "INFO": 1, "WARN": 2, "FAIL": 3}
-MAX_EXAMPLES = 8
+MAX_EXAMPLES = 2000          # kept in full for the team fix list; tables show the first few
 
 
 @dataclass
@@ -269,12 +269,75 @@ def _formula_parity_ok(formula: str) -> bool:
     return odd % 2 == 0
 
 
+def formula_mass(formula: str) -> float | None:
+    """Monoisotopic neutral mass; None if an element is unknown."""
+    total = 0.0
+    for el, n in R.ELEMENT_RE.findall(formula):
+        if el not in R.MONOISOTOPIC:
+            return None
+        total += R.MONOISOTOPIC[el] * (int(n) if n else 1)
+    return total
+
+
+def _fitting_formula(formula: str, ion_mz: float, add: float) -> str | None:
+    """Nearest variant of ``formula`` (H -6..+6, O -1..+1) whose ion matches ``ion_mz``."""
+    counts = {el: int(n) if n else 1 for el, n in R.ELEMENT_RE.findall(formula)}
+    best = None
+    for dh in range(-6, 7):
+        for do in (-1, 0, 1):
+            c = dict(counts)
+            c["H"] = c.get("H", 0) + dh
+            c["O"] = c.get("O", 0) + do
+            if c["H"] < 0 or c["O"] < 0 or (dh == 0 and do == 0):
+                continue
+            name = "".join(f"{el}{c[el]}" for el in c if c[el] > 0)
+            m = formula_mass(name)
+            if m is not None and abs(m + add - ion_mz) <= R.MASS_TOLERANCE:
+                d = abs(m + add - ion_mz)
+                if best is None or d < best[0]:
+                    best = (d, name, m + add)
+    return f"{best[1]} ({best[2]:.3f})" if best else None
+
+
+def _check_formula_mass_suffixes(rep: FileReport, suffixed: list[tuple[str, str, float]],
+                                 plain: set[str]) -> list[str]:
+    """Columns like 'C6H6O1_m97.069': does the stated m/z fit formula + reagent ion?
+    Returns the columns that were explained here (so they are not reported twice)."""
+    label, add = R.REAGENT_IONS.get(rep.instrument, (None, None))
+    if label is None:
+        return []
+    agree, disagree = [], []
+    for orig, formula, mz in suffixed:
+        neutral = formula_mass(formula)
+        if neutral is None:
+            continue
+        expected = neutral + add
+        twin = f"; {formula} is also a separate column" if formula in plain else ""
+        if abs(mz - expected) <= R.MASS_TOLERANCE:
+            agree.append(f"{orig}: m/z {mz:.3f} = {formula}·{label} ({expected:.3f}){twin}")
+        else:
+            fit = _fitting_formula(formula, mz, add)
+            disagree.append(f"{orig}: m/z {mz:.3f} does not fit {formula}·{label} "
+                            f"({expected:.3f})" + (f", but fits {fit.split(' ')[0]}·{label} "
+                            f"{fit.split(' ')[1]}" if fit else "") + twin)
+    if disagree:
+        rep.add(R4, "WARN", f"{len(disagree)} column name(s) give a formula and an m/z that "
+                f"disagree (expected ion = neutral formula + {label}). Please check the formula "
+                "assignment.", disagree)
+    if agree:
+        rep.add(R4, "WARN", f"{len(agree)} column name(s) carry an m/z suffix that agrees with the "
+                "formula, probably to tell a second peak or isomer apart. Use the plain neutral "
+                "formula, or explain the suffix in the metadata comments.", agree)
+    return [s.split(":")[0] for s in agree + disagree]
+
+
 def _check_quantities_units(rep: FileReport, cols: list[tuple[str, str, str]],
                             native: bool = False):
     """``cols`` = (original name, quantity, unit) for every data variable.
     ``native``: SAPHIR data-system file, whose blank units are accepted as is."""
     empty, non_ascii, ion_mass, ion_charge, not_formula, odd_h = [], [], [], [], [], []
     suggest, noncanon = {}, set()
+    suffixed, plain = [], set()          # 'C6H6O1_m97.069' style names; plain formulas
     for orig, qty, unit in cols:
         if unit is None:
             continue
@@ -296,8 +359,16 @@ def _check_quantities_units(rep: FileReport, cols: list[tuple[str, str, str]],
         elif rep.instrument in R.MS_FORMULA_INSTRUMENTS:
             if not R.FORMULA_RE.match(qty):
                 not_formula.append(orig)
-            elif not _formula_parity_ok(qty):
-                odd_h.append(orig)
+                fm = R.FORMULA_MASS_RE.match(qty)
+                if fm:
+                    suffixed.append((orig, fm["formula"], float(fm["mass"])))
+            else:
+                plain.add(qty)
+                if not _formula_parity_ok(qty):
+                    odd_h.append(orig)
+
+    explained = _check_formula_mass_suffixes(rep, suffixed, plain)
+    not_formula = [c for c in not_formula if c not in explained]
 
     if empty and native:
         rep.add(R4, "INFO", f"{len(empty)} variable(s) have a blank unit (native SAPHIR file, "
@@ -489,8 +560,8 @@ def _check_values(rep: FileReport, data: dict[str, np.ndarray], bad_tokens: dict
         top = sorted(zeros.items(), key=lambda kv: -kv[1][0])
         clipped = [c for c, (fr, has_neg) in zeros.items() if fr >= 0.01 and not has_neg]
         msg = (f"Exact zeros in {len(zeros)} of {len(data)} variables ({frac_all:.1%} of all valid "
-               "values). Zero must never be used as a fill value. Please confirm with the team "
-               "whether these zeros are real measurements.")
+               "values). Zero must never be used as a fill value, so these need to be "
+               "confirmed as real measurements.")
         if clipped and negcols:
             msg += (f" {len(clipped)} of these variables have zeros but no negative values while "
                     f"{negcols} other variables do go negative, which suggests negatives were "

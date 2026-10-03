@@ -59,6 +59,12 @@ SAPHIR_IMPORT_EVERY_MIN = 60    # the watcher re-checks Z: this often
 REPORT_DIR = HERE / "reports"
 STATE_DIR = HERE / "state"
 
+# Signature under the team fix lists (feedback.py); can be overridden in settings_local.py
+try:
+    from settings_local import FEEDBACK_SIGNATURE
+except ImportError:
+    FEEDBACK_SIGNATURE = "The SAPHFIRE 2026 data team"
+
 # Upload watcher (the email recipient NOTIFY_TO is set in settings_local.py)
 POLL_SECONDS = 60          # how often Incoming is scanned
 STABLE_SECONDS = 90        # a file must be unchanged this long (sync finished)

@@ -28,7 +28,7 @@ from pathlib import Path
 
 import settings as S
 from evaluate import submission_files
-from report import render_html, subject_line, write_report
+from report import email_subject, render_html, write_report
 from validator import evaluate_file
 
 STATE_FILE = S.STATE_DIR / "seen.json"
@@ -73,9 +73,11 @@ def new_files(state: dict) -> list[Path]:
 
 def process(files: list[Path], state: dict, email: bool) -> None:
     """Evaluate, archive what is ACCEPTED (real runs only), email, refresh the status page."""
+    from feedback import team_messages
     reports = [evaluate_file(p, S.INCOMING, [S.ARCHIVE_METADATA]) for p in files]
-    out = write_report(reports, S.REPORT_DIR)
-    subject = subject_line(reports)
+    messages = team_messages(reports)          # ready-to-forward fix list per team
+    out, fb_files = write_report(reports, S.REPORT_DIR, messages=messages)
+    subject = email_subject(reports, messages)
     for r in reports:
         log.info("%-19s FAIL %2d WARN %2d  %s", r.verdict, r.count("FAIL"), r.count("WARN"),
                  r.path.name)
@@ -88,7 +90,8 @@ def process(files: list[Path], state: dict, email: bool) -> None:
         overview.write_status_page({r.path.name: r.verdict for r in reports})
     if email:
         from notify import send_mail
-        send_mail(S.NOTIFY_TO, subject, render_html(reports), [out])
+        send_mail(S.NOTIFY_TO, subject, render_html(reports, messages=messages),
+                  [out, *fb_files])
         log.info("Emailed %s: %s", S.NOTIFY_TO, subject)
     else:
         log.info("Report: %s (no email, files not marked as seen)", out)

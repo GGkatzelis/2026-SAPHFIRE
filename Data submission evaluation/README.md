@@ -48,7 +48,8 @@ creates no new version.
 | `import_saphir.py` | For every campaign day on `Z:\IEK8-SAPHIR\data\YYYY\MM\DD`: copies `SAPHIR.collected`, `ASS_METEO`, `SAPHIR.LIF.ROx` and `SAPHIR.LP_LIF.kOH` unmodified into Incoming, merges the 40 photolysis-frequency files into one `YYYY-MM-DD.JVALUES.FZJ.csv`, re-copies/rebuilds whatever changed on Z:, and reports products it does not know yet. `--inventory` prints what exists per day. |
 | `jvalues.py` | The J-value merge (chamber `_SAPHIR` and outside `_AMBIENT` columns, values unchanged, metadata file generated). |
 | `validator.py` | Checks one file (CSV, HDF5, SAPHIR NetCDF, metadata) and returns PASS/INFO/WARN/FAIL per rule. |
-| `report.py` | Turns results into one HTML page (email body + forwardable attachment). |
+| `report.py` | Turns results into one HTML page (email body + attachment). |
+| `feedback.py` | Ready-to-forward fix list per team (must fix / please confirm, what to do, all affected columns). |
 | `evaluate.py` | Manual run: evaluate Incoming (or given files) and write a report. |
 | `watcher.py` | Watches Incoming, evaluates new uploads, emails the report via Outlook. |
 | `archive.py` | Archives ACCEPTED files (and ones approved with `--approve`), keeps versions, writes EXPERIMENT_INFO.txt. |
@@ -84,6 +85,7 @@ instrument status notes that say "LT" are local time (CEST = UTC+2).
 ```
 evaluate_incoming.bat                       # check everything in Incoming now, open report
 python evaluate.py path\to\file.csv         # check specific files
+python evaluate.py --email                  # (re)send the report for everything pending
 python import_saphir.py --dry-run           # SAPHIR files from Z: that would be copied
 python import_saphir.py                     # copy new/re-processed SAPHIR files to Incoming
 python campaign.py                          # experiments x instrument status matrix
@@ -102,9 +104,27 @@ before evaluating it. Files that arrive together go out as one email. A file
 that is replaced (size or time changes) is evaluated again. Log:
 `state/watcher.log`.
 
-Start at log-in (one-time setup):
+**Every email** is a report that can be forwarded as is (no salutation or signature): per team, what must be
+fixed (blocking) and what needs confirming, with what to do and the full list of
+affected columns. The same text is saved as `reports/<time>_<TEAM>_feedback.txt`
+and attached, followed by the technical report.
+
+**Runs at log-in** as the Windows scheduled task "SAPHFIRE upload watcher"
+(`pythonw.exe watcher.py`, no window; registered 2026-10-03). Manage it in the
+*Task Scheduler* app, or from PowerShell:
 ```
-schtasks /create /tn "SAPHFIRE upload watcher" /sc onlogon /rl limited /tr "\"<repo>\Data submission evaluation\run_watcher.bat\""
+Get-ScheduledTask   -TaskName "SAPHFIRE upload watcher"     # state
+Start-ScheduledTask -TaskName "SAPHFIRE upload watcher"     # start now
+Stop-ScheduledTask  -TaskName "SAPHFIRE upload watcher"     # stop
+Unregister-ScheduledTask -TaskName "SAPHFIRE upload watcher"  # remove
+```
+To set it up on another PC (PowerShell, no admin needed):
+```
+$dir = "<repo>\Data submission evaluation"; $py = "<venv>\Scripts\pythonw.exe"
+Register-ScheduledTask -TaskName "SAPHFIRE upload watcher" `
+  -Action (New-ScheduledTaskAction -Execute $py -Argument "`"$dir\watcher.py`"" -WorkingDirectory $dir) `
+  -Trigger (New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME") `
+  -Settings (New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew)
 ```
 
 Tests: `...\.venv\Scripts\python.exe -m pytest "Data submission evaluation\tests" -q`

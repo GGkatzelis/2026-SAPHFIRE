@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 import html
+import re
 from pathlib import Path
 
 from validator import RULE_ORDER, STATUS_RANK, FileReport
@@ -58,15 +59,7 @@ def _summary_line(r: FileReport) -> str:
     return " · ".join(bits)
 
 
-def _feedback(r: FileReport) -> list[str]:
-    """Plain sentences for the team: FAIL first, then WARN."""
-    out = []
-    for status in ("FAIL", "WARN"):
-        for c in r.checks:
-            if c.status == status:
-                ex = f" Examples: {', '.join(c.examples[:5])}." if c.examples else ""
-                out.append(f"[{status}] {c.rule}: {c.message}{ex}")
-    return out
+TABLE_EXAMPLES = 8          # the full lists are in the team fix list (feedback.py)
 
 
 def _file_section(r: FileReport) -> str:
@@ -82,8 +75,11 @@ def _file_section(r: FileReport) -> str:
     for c in checks:
         ex = ""
         if c.examples:
+            shown = [_e(x) for x in c.examples[:TABLE_EXAMPLES]]
+            if len(c.examples) > TABLE_EXAMPLES:
+                shown.append(f"... and {len(c.examples) - TABLE_EXAMPLES} more")
             ex = ('<div style="color:#666;font-size:11px;font-family:Consolas,monospace;'
-                  'margin-top:2px">' + "<br>".join(_e(x) for x in c.examples) + "</div>")
+                  'margin-top:2px">' + "<br>".join(shown) + "</div>")
         rows.append(f'<tr><td style="{TD}white-space:nowrap;color:#555">{_e(c.rule)}</td>'
                     f'<td style="{TD}">{_badge(c.status, COLORS[c.status])}</td>'
                     f'<td style="{TD}">{_e(c.message)}{ex}</td></tr>')
@@ -100,18 +96,14 @@ def _file_section(r: FileReport) -> str:
                      f'Metadata as parsed</div><table style="{FONT}font-size:12px;'
                      f'border-collapse:collapse">{items}</table>')
 
-    fb = _feedback(r)
-    fb_html = ""
-    if fb:
-        fb_html = (f'<div style="{FONT}font-size:12px;margin-top:10px;font-weight:600">'
-                   'Feedback for the team (copy and paste)</div>'
-                   '<pre style="background:#f4f6f8;border:1px solid #dde1e5;padding:8px;'
-                   'font-size:11px;white-space:pre-wrap;font-family:Consolas,monospace">'
-                   + _e("\n\n".join(fb)) + "</pre>")
-    return head + table + meta_html + fb_html
+    return head + table + meta_html
 
 
-def render_html(reports: list[FileReport], title: str = "SAPHFIRE 2026 submission check") -> str:
+def render_html(reports: list[FileReport], title: str = "SAPHFIRE 2026 submission check",
+                messages=()) -> str:
+    """Email body / report page. With ``messages`` (feedback.TeamMessage) the team report(s)
+    come first, written so the email can be forwarded as is; the full check table follows
+    as an appendix ("Technical details")."""
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     overview = "".join(
         f'<tr><td style="{TD}font-family:Consolas,monospace">{_e(r.path.name)}</td>'
@@ -119,23 +111,51 @@ def render_html(reports: list[FileReport], title: str = "SAPHFIRE 2026 submissio
         f'<td style="{TD}text-align:right">{r.count("FAIL")}</td>'
         f'<td style="{TD}text-align:right">{r.count("WARN")}</td></tr>' for r in reports)
     th = f'style="{TD}text-align:left;color:#555;font-weight:600"'
-    return (
-        f'<html><head><meta charset="utf-8"><title>{_e(title)}</title></head>'
-        f'<body style="{FONT}color:#1f2328;background:#ffffff;max-width:1000px;margin:16px">'
-        f'<h1 style="{FONT}font-size:20px;margin:0">{_e(title)}</h1>'
-        f'<div style="{FONT}font-size:12px;color:#555;margin:2px 0 12px">Generated {now} · '
-        f'checked against SAPHFIRE_2026_Data_Submission_Format.pdf</div>'
+    technical = (
         f'<table style="{FONT}font-size:12px;border-collapse:collapse">'
         f'<tr><th {th}>File</th><th {th}>Verdict</th><th {th}>FAIL</th><th {th}>WARN</th></tr>'
-        f'{overview}</table>'
-        + "".join(_file_section(r) for r in reports)
-        + "</body></html>")
+        f'{overview}</table>' + "".join(_file_section(r) for r in reports))
+    if messages:
+        sep = '<hr style="border:0;border-top:1px solid #d9dee3;margin:22px 0">'
+        body = (sep.join(m.html for m in messages) + sep
+                + f'<h2 style="{FONT}font-size:16px;margin:0 0 2px">Technical details: all '
+                f'checks</h2><div style="{FONT}font-size:12px;color:#555;margin-bottom:8px">'
+                f'Every rule checked for every file (generated {now}).</div>' + technical)
+    else:
+        body = (f'<h1 style="{FONT}font-size:20px;margin:0">{_e(title)}</h1>'
+                f'<div style="{FONT}font-size:12px;color:#555;margin:2px 0 12px">Generated {now}'
+                ' · checked against SAPHFIRE_2026_Data_Submission_Format.pdf</div>' + technical)
+    return (f'<html><head><meta charset="utf-8"><title>{_e(title)}</title></head>'
+            f'<body style="{FONT}color:#1f2328;background:#ffffff;max-width:1000px;margin:16px">'
+            + body + "</body></html>")
 
 
-def write_report(reports: list[FileReport], out_dir: Path, stem: str | None = None) -> Path:
+def email_subject(reports: list[FileReport], messages=()) -> str:
+    """One team with issues: the team report's subject; otherwise the batch summary."""
+    if len(messages) == 1 and all(_team_key(r) == messages[0].team for r in reports):
+        return messages[0].subject
+    return subject_line(reports)
+
+
+def _team_key(r: FileReport) -> str:
+    from feedback import _team_of
+    return _team_of(r)
+
+
+def write_report(reports: list[FileReport], out_dir: Path, stem: str | None = None,
+                 messages=()) -> tuple[Path, list[Path]]:
+    """Write the HTML report and one <team>_feedback.txt per team message.
+    Returns (report path, feedback paths)."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    ts = f"{dt.datetime.now():%Y%m%d-%H%M%S}"
     if stem is None:
         stem = (reports[0].path.stem if len(reports) == 1 else "batch")
-    path = out_dir / f"{dt.datetime.now():%Y%m%d-%H%M%S}_{stem}.html"
-    path.write_text(render_html(reports), encoding="utf-8")
-    return path
+    path = out_dir / f"{ts}_{stem}.html"
+    path.write_text(render_html(reports, messages=messages), encoding="utf-8")
+    fb_paths = []
+    for m in messages:
+        safe = re.sub(r"[^A-Za-z0-9.-]+", "_", m.team).strip("_")
+        p = out_dir / f"{ts}_{safe}_feedback.txt"
+        p.write_text(m.text, encoding="utf-8")
+        fb_paths.append(p)
+    return path, fb_paths

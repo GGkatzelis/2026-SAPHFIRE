@@ -8,3 +8,6 @@ SCIEBO_ROOT = Path(r"C:\Users\<you>\sciebo - <account>\SAPHFIRE 2026")
 SCIEBO_SHARE_URL = "https://fz-juelich.sciebo.de/s/<share-id>"
 # Who receives the upload emails
 NOTIFY_TO = "<you>@fz-juelich.de"
+
+# Signature under the team fix lists (optional)
+FEEDBACK_SIGNATURE = "<your name>"

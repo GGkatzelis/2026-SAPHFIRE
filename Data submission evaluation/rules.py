@@ -75,6 +75,23 @@ EMAIL_DOMAINS = {
 # Instruments whose columns must be neutral chemical formulas (Rule 4, MS note).
 MS_FORMULA_INSTRUMENTS = {"PTRMS", "WALLE", "H3OCHARON", "NH4CHARON"}
 
+# Reagent ion per MS instrument: (label, mass added to the neutral to give the detected
+# ion, in u). Used to check a mass written next to a formula, e.g. C6H6O1_m97.069.
+_E = 0.000548580                                  # electron mass
+REAGENT_IONS = {
+    "PTRMS":     ("H+",  1.00782503 - _E),         # [M+H]+
+    "H3OCHARON": ("H+",  1.00782503 - _E),
+    "NH4CHARON": ("H+",  1.00782503 - _E),        # PDF typo token, also H3O+
+    "WALLE":     ("Br-", 78.9183376 + _E),        # [M+79Br]-
+}
+MONOISOTOPIC = {"C": 12.0, "H": 1.00782503, "O": 15.99491462, "N": 14.00307401,
+                "S": 31.97207117, "Cl": 34.96885268, "Br": 78.9183376, "F": 18.99840316,
+                "I": 126.904473, "P": 30.97376163, "Si": 27.97692653}
+MASS_TOLERANCE = 0.01                             # u; masses in names have 3 decimals
+# "formula + separator + optional m/mz + mass", e.g. C6H6O1_m97.069, C10H16-mz137.132
+FORMULA_MASS_RE = re.compile(r"^(?P<formula>(?:[A-Z][a-z]?\d*)+)[_\s-]+(?:[mM](?:/?[zZ])?)?\s*"
+                             r"(?P<mass>\d+\.\d+)$")
+
 # Fallback campaign period if the experiments workbook cannot be read; normally
 # the exact days come from campaign.py. A date outside is a warning only.
 CAMPAIGN_WINDOW = (dt.date(2026, 6, 29), dt.date(2026, 7, 17))

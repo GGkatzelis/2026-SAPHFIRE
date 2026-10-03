@@ -109,6 +109,24 @@ def test_odd_hydrogen_warns(tmp_path):
     assert "closed-shell" in _msgs(rep, "WARN")
 
 
+def test_formula_mass_suffix_mismatch(tmp_path):
+    """C6H6O1_m97.069: phenol+H+ is 95.049, 97.069 fits C6H8O+H+ (97.065)."""
+    rep = evaluate_file(_good_csv(tmp_path, **{"C6H6O1 [ppbv]": 1.0,
+                                               "C6H6O1_m97.069 [ppbv]": 1.0}), tmp_path)
+    w = [c for c in rep.checks if "disagree" in c.message]
+    assert w and w[0].status == "WARN"
+    ex = w[0].examples[0]
+    assert "95.049" in ex and "C6H8O1" in ex and "also a separate column" in ex
+    assert "not a plain chemical formula" not in _msgs(rep, "WARN")   # not reported twice
+
+
+def test_formula_mass_suffix_agrees(tmp_path):
+    """C10H16_m137.132 is consistent (monoterpene + H+): flagged only as a naming point."""
+    rep = evaluate_file(_good_csv(tmp_path, **{"C10H16_m137.132 [ppbv]": 1.0}), tmp_path)
+    assert "agrees with the formula" in _msgs(rep, "WARN")
+    assert "disagree" not in _msgs(rep, "WARN")
+
+
 def test_superscript_and_empty_unit(tmp_path):
     rep = evaluate_file(_good_csv(tmp_path, **{"C5H10 [µg m⁻³]": 1.0, "C6H6 []": 1.0}), tmp_path)
     fails = _msgs(rep, "FAIL")

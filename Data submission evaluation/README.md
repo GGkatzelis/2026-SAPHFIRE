@@ -68,7 +68,14 @@ creates no new version.
 Policy decisions beyond the PDF (2026-10-03):
 - Mass spectrometry columns named by ion mass (`mz69.069 [ppbv]`) are rejected:
   quantified data without a formula assignment are of no use.
-- Exact zeros are a warning to clarify with the team, not a rejection.
+- Exact zeros are a warning to clarify with the team, not a rejection. Once a team
+  has explained a warning, it can be accepted per instrument in
+  `rules.ACKNOWLEDGED_WARNINGS` (PTRMS zeros: values at or below the LOD, confirmed
+  04 Oct 2026); it then shows as INFO and no longer blocks archiving.
+- REJECTED files are deleted from Incoming after the report email has gone out, so
+  the team can upload the corrected file under the same name (sciebo upload links
+  cannot overwrite). The status page keeps showing "Needs fixing" until then.
+  NEEDS CONFIRMATION files stay in Incoming until approved.
 - Reports go to G. Gkatzelis only during the test-file phase, not to the teams.
 - The token list is open: an unregistered instrument or institution token is a
   warning; tokens are added to `rules.py` as submissions arrive. The CHARON

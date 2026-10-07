@@ -13,8 +13,10 @@ watcher's memory of what it has already seen stay in this folder (git-ignored).
 Files uploaded together (same scan) arrive as ONE email, so a team uploading
 thirty days does not produce thirty messages. A file that is replaced by a
 new version (size or modification time changes) is evaluated again.
-ACCEPTED files are archived straight away (archive.py) and the status page in
-the SAPHFIRE 2026 folder is refreshed; with --no-email nothing is archived.
+ACCEPTED files are archived straight away (archive.py), REJECTED files are deleted
+from Incoming after the report email has gone out (so the team can upload the fix
+under the same name), and the status page in the SAPHFIRE 2026 folder is
+refreshed. With --no-email nothing is archived or deleted.
 """
 from __future__ import annotations
 
@@ -81,23 +83,24 @@ def process(files: list[Path], state: dict, email: bool) -> None:
     for r in reports:
         log.info("%-19s FAIL %2d WARN %2d  %s", r.verdict, r.count("FAIL"), r.count("WARN"),
                  r.path.name)
-    if email and S.AUTO_ARCHIVE:
+    if not email:
+        log.info("Report: %s (no email, files not marked as seen)", out)
+        return
+    if S.AUTO_ARCHIVE:
         from archive import run_archive
         archived = run_archive(reports, log=log.info)
         if archived:
             subject += f" ({len(archived)} archived)"
-        import overview
-        overview.write_status_page({r.path.name: r.verdict for r in reports})
-    if email:
-        from notify import send_mail
-        send_mail(S.NOTIFY_TO, subject, render_html(reports, messages=messages),
-                  [out, *fb_files])
-        log.info("Emailed %s: %s", S.NOTIFY_TO, subject)
-    else:
-        log.info("Report: %s (no email, files not marked as seen)", out)
-        return
+    from notify import send_mail
+    send_mail(S.NOTIFY_TO, subject, render_html(reports, messages=messages), [out, *fb_files])
+    log.info("Emailed %s: %s", S.NOTIFY_TO, subject)
+    if S.DELETE_REJECTED:               # only after the report has gone out
+        from archive import delete_rejected
+        delete_rejected(reports, log=log.info)
+    import overview
+    overview.write_status_page({r.path.name: r.verdict for r in reports})
     for p, r in zip(files, reports):
-        if not p.exists():          # archived: moved out of Incoming
+        if not p.exists():          # archived (moved) or rejected (deleted)
             state.pop(_key(p), None)
             continue
         state[_key(p)] = {"sig": _sig(p), "verdict": r.verdict,
@@ -145,7 +148,8 @@ def run_forever(email: bool, z_import: bool = True) -> None:
                 process(ready, state, email)
                 for p in ready:
                     pending.pop(_key(p), None)
-                    done[_key(p)] = _sig(p)
+                    if p.exists():              # archived files have left Incoming
+                        done[_key(p)] = _sig(p)
         except Exception:
             # keep watching; files stay un-'seen' and are retried on the next scan
             log.exception("Scan failed")

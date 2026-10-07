@@ -155,9 +155,22 @@ def test_negative_noise_is_not_a_fill_value(tmp_path):
 
 
 def test_zeros_warn_only(tmp_path):
+    """Any instrument without an acknowledgement: exact zeros need confirmation."""
+    z = np.r_[np.zeros(50), np.ones(150)]
+    meta = META.replace("PTRMS", "WALLE")
+    rep = evaluate_file(_good_csv(tmp_path, name=f"{DAY}.WALLE.FZJ.csv", meta=None,
+                                  **{"C6H6 [ppbv]": z}), tmp_path)
+    (tmp_path / "Metadata.WALLE.FZJ.txt").write_text(meta)
+    rep = evaluate_file(tmp_path / f"{DAY}.WALLE.FZJ.csv", tmp_path)
+    assert rep.verdict == "NEEDS CONFIRMATION" and "Exact zeros" in _msgs(rep, "WARN")
+
+
+def test_zeros_acknowledged_for_ptrms_only(tmp_path):
+    """PTRMS zeros were confirmed by the team: INFO with the note, file ACCEPTED."""
     z = np.r_[np.zeros(50), np.ones(150)]
     rep = evaluate_file(_good_csv(tmp_path, **{"C6H6 [ppbv]": z}), tmp_path)
-    assert rep.verdict == "NEEDS CONFIRMATION" and "Exact zeros" in _msgs(rep, "WARN")
+    assert rep.verdict == "ACCEPTED", _msgs(rep, "WARN")
+    assert "confirmed by the PTRMS PI" in _msgs(rep, "INFO")
 
 
 def test_local_time_spillover(tmp_path):

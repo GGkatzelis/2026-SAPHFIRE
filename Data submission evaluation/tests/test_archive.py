@@ -97,14 +97,43 @@ def test_rejected_and_review_stay_pending(sciebo):
     assert "Needs fixing" in html and "PTR-ToF-MS" in html
 
 
+def test_rejected_deleted_but_still_shown(sciebo, monkeypatch, tmp_path):
+    """After the email: rejected file leaves Incoming, status page still says Needs fixing,
+    and a corrected re-upload under the same name is archived."""
+    import archive
+    import overview
+    from validator import evaluate_file
+    monkeypatch.setattr(archive, "REJECTED_NOTES", tmp_path / "rejected.json")
+    inc, arc = sciebo
+    (inc / "Metadata.PTRMS.FZJ.txt").write_text(META)
+    bad = inc / f"{DAY}.PTRMS.FZJ.csv"
+    bad.write_text(f"time_utc,mz69.069 [ppbv]\n{DAY} 06:00:00,1.0\n")
+    gone = archive.delete_rejected([evaluate_file(bad, inc)], log=lambda m: None)
+    assert gone == [bad.name] and not bad.exists()
+    assert "Needs fixing" in overview.render()
+    _csv(inc)                                   # corrected file, same name
+    archive.run_archive(log=lambda m: None)
+    assert (arc / "2026-07-02_E02_Smoldering-Fire_Day" / bad.name).exists()
+
+
+def test_delete_never_touches_accepted(sciebo, monkeypatch, tmp_path):
+    import archive
+    from validator import evaluate_file
+    monkeypatch.setattr(archive, "REJECTED_NOTES", tmp_path / "rejected.json")
+    inc, _ = sciebo
+    (inc / "Metadata.PTRMS.FZJ.txt").write_text(META)
+    good = _csv(inc)
+    assert archive.delete_rejected([evaluate_file(good, inc)], log=lambda m: None) == []
+    assert good.exists()
+
+
 def test_approve_needs_confirmation(sciebo):
     import archive
     inc, arc = sciebo
     (inc / "Metadata.PTRMS.FZJ.txt").write_text(META)
-    z = np.r_[np.zeros(10), np.ones(40)]
     p = _csv(inc)
     df = pd.read_csv(p, comment="#")
-    df["C5H8 [ppbv]"] = z
+    df = df.rename(columns={"C5H8 [ppbv]": "C5H8_isomer2 [ppbv]"})   # WARN: not a plain formula
     p.write_text(df.to_csv(index=False))
     archive.run_archive(log=lambda m: None)
     assert p.exists(), "NEEDS CONFIRMATION stays pending"

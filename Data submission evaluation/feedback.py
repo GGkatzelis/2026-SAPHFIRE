@@ -209,7 +209,14 @@ VERDICT_COLOURS = {"REJECTED": ("#fbd9d5", "#8a1c12"), "NEEDS CONFIRMATION": ("#
 RESUBMIT = ("Upload the corrected file(s) under the same name to Incoming-Upload in the "
             "SAPHFIRE 2026 sciebo folder. They are checked automatically; accepted files move "
             "to Archive-Download and appear in SAPHFIRE_2026_Submission_Status.pdf.")
+REMOVED = ("Files that were not accepted are removed from Incoming-Upload, so the corrected "
+           "version can be uploaded under the same name.")
 FONT = "font-family:Segoe UI,Calibri,Arial,sans-serif;"
+
+
+def _resubmit(m: "TeamMessage") -> str:
+    rejected = any(v == "REJECTED" for _, v in m.files)
+    return RESUBMIT + (" " + REMOVED if rejected and getattr(S, "DELETE_REJECTED", False) else "")
 
 
 def _footer() -> str:
@@ -250,7 +257,7 @@ def _render(m: TeamMessage) -> tuple[str, str]:
                 lines.append(f"   Affected ({len(it.examples)}): " + ", ".join(it.examples))
             if len(m.files) > 1:
                 lines.append(f"   In: {', '.join(it.files)}")
-    lines += ["", "HOW TO RESUBMIT", RESUBMIT, "", _footer()]
+    lines += ["", "HOW TO RESUBMIT", _resubmit(m), "", _footer()]
     text = "\n".join(lines)
 
     # --- HTML (the email body; inline styles for Outlook) ---
@@ -292,7 +299,7 @@ def _render(m: TeamMessage) -> tuple[str, str]:
                    f'{e(", ".join(it.files))}</div>' if len(m.files) > 1 else "")
                 + "</div>")
     parts += [f'<h3 style="{FONT}font-size:15px;margin:16px 0 4px">How to resubmit</h3>',
-              f'<div style="font-size:13px">{e(RESUBMIT)}</div>',
+              f'<div style="font-size:13px">{e(_resubmit(m))}</div>',
               f'<div style="font-size:12px;color:#5d6670;margin-top:10px">{e(_footer())}</div>',
               "</div>"]
     return text, "".join(parts)

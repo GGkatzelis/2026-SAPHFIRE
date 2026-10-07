@@ -34,6 +34,10 @@ EDGE = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
 # Incoming (pending) until approved with:  python archive.py --approve <file>
 AUTO_ARCHIVE = True
 AUTO_ARCHIVE_VERDICTS = ("ACCEPTED",)
+# REJECTED files are deleted from Incoming once the report email has been sent, so
+# the team can upload the corrected file under the same name (the sciebo upload link
+# cannot overwrite). Only a one-line note is kept, for the status page.
+DELETE_REJECTED = True
 
 # SAPHIR data system on the Z: drive: <SAPHIR_Z>\YYYY\MM\DD\YYYY-MM-DD.<product>.nc
 SAPHIR_Z = Path(r"Z:\IEK8-SAPHIR\data")

@@ -92,6 +92,17 @@ MASS_TOLERANCE = 0.01                             # u; masses in names have 3 de
 FORMULA_MASS_RE = re.compile(r"^(?P<formula>(?:[A-Z][a-z]?\d*)+)[_\s-]+(?:[mM](?:/?[zZ])?)?\s*"
                              r"(?P<mass>\d+\.\d+)$")
 
+# Warnings a team has explained and the coordinator accepted, per instrument token:
+# (pattern in the warning message, note). They become INFO, so they no longer block
+# automatic archiving, and the note appears in the report.
+ACKNOWLEDGED_WARNINGS: dict[str, list[tuple[str, str]]] = {
+    "PTRMS": [
+        (r"^Exact zeros",
+         "Accepted for PTRMS: confirmed by the PTRMS PI (UOW) on 04 Oct 2026 as real "
+         "values at or below the baseline LOD after background subtraction."),
+    ],
+}
+
 # Fallback campaign period if the experiments workbook cannot be read; normally
 # the exact days come from campaign.py. A date outside is a warning only.
 CAMPAIGN_WINDOW = (dt.date(2026, 6, 29), dt.date(2026, 7, 17))

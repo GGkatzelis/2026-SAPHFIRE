@@ -27,6 +27,7 @@ import argparse
 import csv
 import datetime as dt
 import hashlib
+import json
 import os
 import shutil
 import sys
@@ -179,6 +180,40 @@ def write_experiment_info() -> None:
         text = "\n".join(lines) + "\n"
         if not path.exists() or path.read_text(encoding="utf-8") != text:
             _write_atomic(path, text)
+
+
+REJECTED_NOTES = S.STATE_DIR / "rejected.json"
+
+
+def read_rejected() -> dict[str, dict]:
+    """file name -> {"time", "fails"} for rejected files that were deleted from Incoming."""
+    try:
+        return json.loads(REJECTED_NOTES.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def delete_rejected(reports: list[FileReport], log=print) -> list[str]:
+    """Delete REJECTED files from Incoming (call only after the report email went out),
+    so the corrected file can be uploaded under the same name. Keeps a one-line note per
+    file for the status page; the report itself is in reports/ and in the email."""
+    notes, gone = read_rejected(), []
+    for r in reports:
+        if r.verdict != "REJECTED" or not r.path.exists():
+            continue
+        try:
+            r.path.relative_to(S.INCOMING)
+        except ValueError:
+            continue                              # never delete outside Incoming
+        r.path.unlink()
+        notes[r.path.name] = {"time": dt.datetime.now(dt.timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S"), "fails": r.count("FAIL")}
+        gone.append(r.path.name)
+        log(f"  deleted (rejected)  {r.path.name}")
+    if gone:
+        S.STATE_DIR.mkdir(parents=True, exist_ok=True)
+        REJECTED_NOTES.write_text(json.dumps(notes, indent=1), encoding="utf-8")
+    return gone
 
 
 def evaluate_incoming() -> list[FileReport]:

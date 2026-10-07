@@ -16,7 +16,7 @@ from pathlib import Path
 import campaign
 import rules as R
 import settings as S
-from archive import latest_versions
+from archive import latest_versions, read_rejected
 from evaluate import submission_files
 from validator import evaluate_file
 
@@ -58,6 +58,13 @@ def _collect(known_verdicts=None):
         day, key = R.file_key(f)
         if day:
             pend.setdefault((key, day), []).append((f, verdict, mtime))
+    # rejected files were deleted from Incoming; keep showing "Needs fixing" until a
+    # corrected version is archived or uploaded
+    for f, note in read_rejected().items():
+        day, key = R.file_key(f)
+        if day and (key, day) not in arch and (key, day) not in pend:
+            t = dt.datetime.fromisoformat(note["time"]).replace(tzinfo=dt.timezone.utc)
+            pend[(key, day)] = [(f, "REJECTED", t.timestamp())]
     known_keys = {k for _, _, keys in R.STATUS_ROWS for k in keys}
     extra = sorted({k for k, _ in list(arch) + list(pend)} - known_keys)
     rows = list(R.STATUS_ROWS) + [(f"{k} (new token)", None, (k,)) for k in extra]
@@ -107,7 +114,7 @@ def _cell(row, exp, arch, pend, sheet_status):
         sub += " · update in review"
     tip = [f"{label} - {exp.label if exp.is_experiment else exp.title}"]
     tip += [f"archived: {r['file']} v{r['version']} ({r['archived_utc']} UTC)" for r in arch_rows]
-    tip += [f"in Incoming: {f} ({v.lower()})" for f, v, _ in pend_items]
+    tip += [f"submitted: {f} ({v.lower()})" for f, v, _ in pend_items]
     tip += notes
     return state, text, sub, "\n".join(tip), last
 

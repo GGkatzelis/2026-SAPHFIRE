@@ -75,7 +75,21 @@ class FileReport:
 def evaluate_file(path: Path, incoming: Path | None = None, metadata_dirs=()) -> FileReport:
     """``metadata_dirs``: further places to look for the instrument's metadata file
     (the archive), after the data file's own folder."""
-    path = Path(path)
+    rep = _evaluate(Path(path), incoming, metadata_dirs)
+    _apply_acknowledgements(rep)
+    return rep
+
+
+def _apply_acknowledgements(rep: FileReport) -> None:
+    """Turn warnings listed in rules.ACKNOWLEDGED_WARNINGS for this instrument into INFO."""
+    for pattern, note in R.ACKNOWLEDGED_WARNINGS.get(rep.instrument or "", []):
+        for c in rep.checks:
+            if c.status == "WARN" and re.search(pattern, c.message):
+                c.status = "INFO"
+                c.message = f"{c.message} {note}"
+
+
+def _evaluate(path: Path, incoming: Path | None, metadata_dirs) -> FileReport:
     name = path.name
     if name.startswith("Metadata."):
         rep = FileReport(path, "metadata")

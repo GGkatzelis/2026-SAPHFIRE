@@ -188,6 +188,26 @@ def test_native_saphir_nc_to_csv(sciebo):
     assert "time_reference = centre" in out.read_text()
 
 
+def test_rebuild_keeps_version_and_log(sciebo):
+    import archive
+    inc, arc = sciebo
+    (inc / "Metadata.PTRMS.FZJ.txt").write_text(META)
+    src = _csv(inc)
+    archive.run_archive(log=lambda m: None)
+    harm = arc / "2026-07-02_E02_Smoldering-Fire_Day" / src.name
+    before, n_log = harm.read_text(), len(_log())
+    harm.write_text("damaged")
+    assert archive.rebuild_harmonised(log=lambda m: None) == 1
+    assert harm.read_text() == before and len(_log()) == n_log
+
+
+def test_float32_written_shortest(tmp_path):
+    """float32 0.001 is written as 0.001, not 0.001000000047; whole numbers stay plain."""
+    from harmonise import _frame_to_csv
+    df = pd.DataFrame({"t": list("abcd"), "a": np.array([0.001, 0.0, np.nan, 11.2033], "f4")})
+    assert _frame_to_csv(df).split("\n")[1:5] == ["a,0.001", "b,0", "c,", "d,11.2033"]
+
+
 def test_h5_size_distribution_to_csv(tmp_path):
     """Two times and two bins on purpose: the bin axis must not be read as a time series."""
     import h5py
@@ -203,3 +223,19 @@ def test_h5_size_distribution_to_csv(tmp_path):
     lines = [l for l in harmonised_text(p, []).splitlines() if not l.startswith("#")]
     assert lines[0] == "time_utc,Ntot [cm-3],dNdlogDp 14.6nm [cm-3],dNdlogDp 20nm [cm-3]"
     assert lines[1] == f"{DAY} 06:00:00,5,1,2"
+
+
+def test_h5_bins_by_time_transposed(tmp_path):
+    import h5py
+    from harmonise import harmonised_text
+    p = tmp_path / f"{DAY}.SMPS-AMS.PATRAS.h5"
+    t0 = pd.Timestamp(f"{DAY} 06:00:00").timestamp()
+    with h5py.File(p, "w") as f:
+        f.create_dataset("time_utc", data=t0 + 60.0 * np.arange(2)).attrs["units"] = \
+            "seconds since 1970-01-01 00:00:00 UTC"
+        # three bins x two times
+        f.create_dataset("dNdlogDp", data=np.array([[1, 2], [3, 4], [5, 6]], "f4")).attrs["units"] = "cm-3"
+        f.create_dataset("diameter", data=np.array([10, 20, 40], "f4")).attrs["units"] = "nm"
+    lines = [l for l in harmonised_text(p, []).splitlines() if not l.startswith("#")]
+    assert lines[0] == "time_utc,dNdlogDp 10nm [cm-3],dNdlogDp 20nm [cm-3],dNdlogDp 40nm [cm-3]"
+    assert lines[1] == f"{DAY} 06:00:00,1,3,5"

@@ -95,12 +95,17 @@ FORMULA_MASS_RE = re.compile(r"^(?P<formula>(?:[A-Z][a-z]?\d*)+)[_\s-]+(?:[mM](?
 # Warnings a team has explained and the coordinator accepted, per instrument token:
 # (pattern in the warning message, note). They become INFO, so they no longer block
 # automatic archiving, and the note appears in the report.
+#
+# PTRMS is deliberately NOT listed: after the recent processing updates its data should
+# contain no exact zeros, so they are checked (WARN) again (decision 08 Oct 2026; day 1
+# was archived earlier under a one-off acknowledgement).
+_ZERO_COUNTS = (r"^Exact zeros",
+                "Zero values are expected for this instrument (zero counts / no "
+                "absorption) and are accepted.")
 ACKNOWLEDGED_WARNINGS: dict[str, list[tuple[str, str]]] = {
-    "PTRMS": [
-        (r"^Exact zeros",
-         "Accepted for PTRMS: confirmed by the PTRMS PI (UOW) on 04 Oct 2026 as real "
-         "values at or below the baseline LOD after background subtraction."),
-    ],
+    "SMPS-AMS":     [_ZERO_COUNTS],
+    "SMPS-WALLE":   [_ZERO_COUNTS],
+    "AETHALOMETER": [_ZERO_COUNTS],
 }
 
 # Fallback campaign period if the experiments workbook cannot be read; normally

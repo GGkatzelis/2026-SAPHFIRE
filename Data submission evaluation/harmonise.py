@@ -46,6 +46,13 @@ def _time_text(t: pd.Series | pd.DatetimeIndex) -> pd.Series:
 
 
 def _frame_to_csv(df: pd.DataFrame) -> str:
+    # float32 (HDF5/NetCDF): shortest text that reads back to the identical float32
+    # ("0.001", not "0.001000000047"); float64 keeps FLOAT_FORMAT
+    df = df.copy()
+    for c in df.columns:
+        if df[c].dtype == np.float32:
+            s = df[c]
+            df[c] = s.astype(str).str.replace(r"\.0$", "", regex=True).where(s.notna())
     buf = io.StringIO()
     df.to_csv(buf, index=False, float_format=FLOAT_FORMAT, na_rep="", lineterminator="\n")
     return buf.getvalue()
@@ -55,13 +62,13 @@ def _from_csv(src: Path) -> tuple[str, list[str]]:
     text = src.read_bytes().decode("utf-8-sig", errors="replace").replace("\r\n", "\n")
     lines = text.split("\n")
     original_comments = [l for l in lines if l.lstrip().startswith("#")]
-    body = [l for l in lines if l.strip() and not l.lstrip().startswith("#")]
+    body = [l for l in lines if l.strip(" ,\t\r") and not l.lstrip().startswith("#")]
     return "\n".join(body) + "\n", original_comments
 
 
 def _from_h5(src: Path) -> str:
     import h5py
-    from validator import _EPOCH_RE, _attr_str
+    from validator import _EPOCH_RE, _attr_str, _h5_transposed
 
     with h5py.File(src, "r") as f:
         def times(name):
@@ -79,12 +86,14 @@ def _from_h5(src: Path) -> str:
         # bin axis of each 2-D dataset: a 1-D dataset of matching length, preferring
         # axis-like names (needed when the number of bins equals the number of times)
         axis_like = re.compile(r"diam|^dp|bin|size|axis|mass|^mz|wavelength|temp", re.I)
+        # 2-D arrays as (time, bins); (bins, time) is transposed (accepted by the validator)
+        grids = {k: f[k][()] for k in dsets if f[k].ndim == 2 and f[k].shape[0] == n}
+        grids |= {k: f[k][()].T for k in dsets if k not in grids and _h5_transposed(f[k], n)}
         axis_of = {}
-        for k in dsets:
-            if f[k].ndim == 2 and f[k].shape[0] == n:
-                cands = [a for a in dsets if f[a].ndim == 1 and f[a].shape[0] == f[k].shape[1]]
-                cands.sort(key=lambda a: (not axis_like.search(a), f[a].shape[0] == n))
-                axis_of[k] = cands[0] if cands else None
+        for k, g in grids.items():
+            cands = [a for a in dsets if f[a].ndim == 1 and f[a].shape[0] == g.shape[1]]
+            cands.sort(key=lambda a: (not axis_like.search(a), f[a].shape[0] == n))
+            axis_of[k] = cands[0] if cands else None
         axes = {a for a in axis_of.values() if a}
         for k in dsets:
             d, unit = f[k], clean_unit(_attr_str(f[k], "units"))
@@ -92,14 +101,21 @@ def _from_h5(src: Path) -> str:
                 continue
             if d.ndim == 1 and d.shape[0] == n:
                 cols[f"{k} [{unit}]"] = d[()]
-            elif d.ndim == 2 and d.shape[0] == n:
+            elif k in grids:
+                data = grids[k]
                 ax_name = axis_of[k]
-                ax = f[ax_name][()] if ax_name else np.arange(d.shape[1])
+                ax = f[ax_name][()] if ax_name else np.arange(data.shape[1])
                 ax_unit = clean_unit(_attr_str(f[ax_name], "units")) if ax_name else ""
-                data = d[()]
                 for i, b in enumerate(ax):
                     cols[f"{k} {b:g}{ax_unit if ax_unit != '1' else ''} [{unit}]"] = data[:, i]
     return _frame_to_csv(pd.DataFrame(cols))
+
+
+def _floats(a) -> np.ndarray:
+    """Masked NetCDF values as floats with NaN for missing, keeping float32 as float32."""
+    a = np.ma.asarray(a)
+    dtype = a.dtype if a.dtype.kind == "f" else np.float64
+    return np.ma.filled(a.astype(dtype), np.nan)
 
 
 def _from_nc(src: Path) -> str:
@@ -118,10 +134,10 @@ def _from_nc(src: Path) -> str:
             if k == tname or "@" in k or v.ndim != 1 or v.shape[0] != n or v.dtype.kind not in "fiu":
                 continue
             unit = clean_unit(getattr(v, "units", ""))
-            cols[f"{k} [{unit}]"] = np.ma.filled(v[:].astype(float), np.nan)
+            cols[f"{k} [{unit}]"] = _floats(v[:])
             sd = f"{k}@STDEV"
             if sd in nc.variables:
-                cols[f"{k}_STDEV [{unit}]"] = np.ma.filled(nc[sd][:].astype(float), np.nan)
+                cols[f"{k}_STDEV [{unit}]"] = _floats(nc[sd][:])
     return _frame_to_csv(pd.DataFrame(cols))
 
 

@@ -109,29 +109,99 @@ def process(files: list[Path], state: dict, email: bool) -> None:
     log.info("Report: %s", out)
 
 
-def import_from_z() -> None:
-    """Copy new/updated SAPHIR files from Z: into Incoming; the scan then reports them."""
-    from import_saphir import run_import
-    try:
-        res = run_import(log=lambda m: log.info("Z: %s", m.strip()))
-        for p, ds in res.new_products.items():
+Z_PRODUCTS_FILE = S.STATE_DIR / "z_new_products.json"
+
+
+class ZWatch:
+    """Hourly SAPHIR import from Z:, robust to the VPN being off.
+
+    While Z: is unreachable it is re-tried every few minutes (so the import starts
+    soon after the VPN comes up), logged once instead of once per campaign day, and
+    after Z_OFFLINE_EMAIL_HOURS a single reminder email is sent. Products that show
+    up on Z: but are neither imported nor ignored (e.g. a newly processed NOx or
+    TOC file) are emailed once each.
+    """
+
+    def __init__(self, email: bool):
+        self.email = email
+        self.next_run = 0.0
+        self.offline_since: float | None = None
+        self.reminded = False
+
+    def due(self) -> bool:
+        return time.time() >= self.next_run
+
+    def run(self) -> None:
+        now = time.time()
+        if not S.SAPHIR_Z.exists():
+            if self.offline_since is None:
+                self.offline_since = now
+                log.warning("Z: not reachable (%s) - VPN not connected? Retrying every %d min",
+                            S.SAPHIR_Z, S.SAPHIR_RETRY_MIN)
+            elif (not self.reminded and self.email
+                  and now - self.offline_since >= S.Z_OFFLINE_EMAIL_HOURS * 3600):
+                self._mail("[SAPHFIRE upload] Z: drive not reachable - connect the VPN",
+                           f"<p>The upload watcher has not reached <code>{S.SAPHIR_Z}</code> since "
+                           f"{time.strftime('%d %b %H:%M', time.localtime(self.offline_since))}. "
+                           "SAPHIR data (chamber, meteo, LIF, kOH, J-values) are not imported "
+                           "until the VPN is connected; the watcher picks it up by itself "
+                           f"within {S.SAPHIR_RETRY_MIN} min.</p>")
+                self.reminded = True
+            self.next_run = now + S.SAPHIR_RETRY_MIN * 60
+            return
+        if self.offline_since is not None:
+            log.info("Z: reachable again after %.0f min", (now - self.offline_since) / 60)
+            self.offline_since, self.reminded = None, False
+        from import_saphir import run_import
+        try:
+            res = run_import(log=lambda m: log.info("Z: %s", m.strip()))
+            self._report_new(res.new_products)
+            self.next_run = now + S.SAPHIR_IMPORT_EVERY_MIN * 60
+        except Exception:
+            log.exception("SAPHIR import from Z: failed")
+            self.next_run = now + S.SAPHIR_RETRY_MIN * 60
+
+    def _report_new(self, new_products: dict[str, list[str]]) -> None:
+        try:
+            known = set(json.loads(Z_PRODUCTS_FILE.read_text(encoding="utf-8")))
+        except (FileNotFoundError, json.JSONDecodeError):
+            known = set()
+        fresh = {p: ds for p, ds in new_products.items() if p not in known}
+        for p, ds in new_products.items():
             log.warning("New product on Z: not imported: %s (%s)", p, ", ".join(ds))
-    except Exception:
-        log.exception("SAPHIR import from Z: failed (is Z: mounted?)")
+        if not fresh:
+            return
+        if self.email:
+            rows = "".join(f"<li><code>{p}</code>: {', '.join(ds)}</li>"
+                           for p, ds in sorted(fresh.items()))
+            self._mail(f"[SAPHFIRE upload] {len(fresh)} new product(s) on Z:",
+                       f"<p>New on <code>{S.SAPHIR_Z}</code>, not imported yet:</p><ul>{rows}</ul>"
+                       "<p>To import them, add the product to <code>SAPHIR_IMPORT_PRODUCTS</code> "
+                       "(or to <code>SAPHIR_IGNORED_PRODUCTS</code> to silence this) in settings.py.</p>")
+        S.STATE_DIR.mkdir(parents=True, exist_ok=True)
+        Z_PRODUCTS_FILE.write_text(json.dumps(sorted(known | set(fresh)), indent=1),
+                                   encoding="utf-8")
+
+    @staticmethod
+    def _mail(subject: str, body: str) -> None:
+        from notify import send_mail
+        try:
+            send_mail(S.NOTIFY_TO, subject, body)
+        except Exception:
+            log.exception("Email failed: %s", subject)
 
 
 def run_forever(email: bool, z_import: bool = True) -> None:
     state = load_state()
     pending: dict[str, tuple[list, float]] = {}       # key -> (sig, first seen with that sig)
     done: dict[str, list] = {}       # reported this session (matters with --no-email)
-    last_import = 0.0
+    z = ZWatch(email) if z_import else None
     log.info("Watching %s every %d s (stable after %d s)%s", S.INCOMING, S.POLL_SECONDS,
              S.STABLE_SECONDS, f"; Z: import every {S.SAPHIR_IMPORT_EVERY_MIN} min"
              if z_import else "")
     while True:
-        if z_import and time.time() - last_import >= S.SAPHIR_IMPORT_EVERY_MIN * 60:
-            import_from_z()
-            last_import = time.time()
+        if z and z.due():
+            z.run()
         try:
             now = time.time()
             ready = []

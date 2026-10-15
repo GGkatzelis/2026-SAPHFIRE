@@ -55,7 +55,7 @@ class FileReport:
     summary: dict = field(default_factory=dict)
 
     def add(self, rule, status, message, examples=None):
-        self.checks.append(Check(rule, status, message, list(examples or [])[:MAX_EXAMPLES]))
+        self.checks.append(Check(rule, status, message, [str(e) for e in list(examples or [])[:MAX_EXAMPLES]]))
 
     @property
     def worst(self) -> str:
@@ -85,8 +85,9 @@ def _apply_acknowledgements(rep: FileReport) -> None:
     for pattern, note in R.ACKNOWLEDGED_WARNINGS.get(rep.instrument or "", []):
         for c in rep.checks:
             if c.status == "WARN" and re.search(pattern, c.message):
+                found = c.message.split(". ")[0].rstrip(".")      # the finding, not the ask
                 c.status = "INFO"
-                c.message = f"{c.message} {note}"
+                c.message = f"{found}. {note}"
 
 
 def _evaluate(path: Path, incoming: Path | None, metadata_dirs) -> FileReport:
@@ -615,7 +616,12 @@ def _validate_csv(rep: FileReport, meta: dict | None):
 
     lines = text.splitlines()
     comments = [i for i, l in enumerate(lines) if l.lstrip().startswith("#")]
-    body = [(i + 1, l) for i, l in enumerate(lines) if l.strip() and not l.lstrip().startswith("#")]
+    # rows of only commas (Excel's trailing empty rows) count as blank lines
+    body = [(i + 1, l) for i, l in enumerate(lines)
+            if l.strip(" ,\t\r") and not l.lstrip().startswith("#")]
+    n_empty = sum(1 for l in lines if l.strip() and not l.strip(" ,\t\r"))
+    if n_empty:
+        rep.add(R2, "INFO", f"{n_empty} empty row(s) (only commas) are skipped.")
     rep.add(R6, "PASS" if comments else "INFO",
             f"{len(comments)} comment line(s) starting with # are skipped." if comments
             else "No # comment lines (optional).")
@@ -704,7 +710,7 @@ def _validate_csv(rep: FileReport, meta: dict | None):
 
 
 def _parse_time_text(rep: FileReport, s: pd.Series, label: str) -> pd.Series:
-    s = s.astype(str).str.strip()
+    s = s.fillna("").astype(str).str.strip()     # pandas 3 keeps NaN in astype(str)
     ok = s.str.match(R.TIME_TEXT_RE)
     if (~ok).any():
         bad = s[~ok]
@@ -793,7 +799,10 @@ def _validate_h5(rep: FileReport, meta: dict | None):
         _check_intervals(rep, t, meta, t_end is not None, t_end)
 
         others = {k: d for k, d in dsets.items() if k not in (R.TIME_COL, R.TIME_END_COL)}
+        # 2-D stored as (bins, time) is accepted when unambiguous and transposed
+        transposed = [k for k, d in others.items() if _h5_transposed(d, n)]
         axis_lens = {d.shape[1] for d in others.values() if d.ndim == 2 and d.shape[0] == n}
+        axis_lens |= {others[k].shape[0] for k in transposed}
         cols, bracketed, shape_bad, data, axes = [], [], [], {}, []
         for k, d in others.items():
             if "[" in k or "]" in k:
@@ -803,6 +812,8 @@ def _validate_h5(rep: FileReport, meta: dict | None):
                 data[k] = d[()]
             elif d.ndim == 2 and d.shape[0] == n:
                 data[k] = d[()]
+            elif k in transposed:
+                data[k] = d[()].T
             elif d.ndim == 1 and d.shape[0] in axis_lens:
                 axes.append(k)
                 ax = d[()]
@@ -818,10 +829,19 @@ def _validate_h5(rep: FileReport, meta: dict | None):
                     f"({n}) and are not a bin axis of a 2-D dataset.", shape_bad)
         if axes:
             rep.add(R2, "PASS", f"2-D spectra/size distributions with bin axis: {', '.join(axes)}.")
+        if transposed:
+            rep.add(R2, "INFO", f"{len(transposed)} 2-D dataset(s) are stored as (bins, time) "
+                    "instead of (time, bins); accepted and transposed in the archive copy.",
+                    [f"{k}: shape {others[k].shape}" for k in transposed])
         rep.summary.update(rows=n, variables=len(others))
         # every dataset, bin axes included, needs a non-empty 'units' attribute
         _check_quantities_units(rep, cols)
         _check_values(rep, data, {})
+
+
+def _h5_transposed(d, n: int) -> bool:
+    """2-D dataset stored as (bins, time); only when the orientation is unambiguous."""
+    return d.ndim == 2 and d.shape[1] == n and d.shape[0] != n
 
 
 # ============================================================================

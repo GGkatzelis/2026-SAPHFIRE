@@ -55,6 +55,7 @@ creates no new version.
 | `archive.py` | Archives ACCEPTED files (and ones approved with `--approve`), keeps versions, writes EXPERIMENT_INFO.txt. |
 | `harmonise.py` | Converts CSV / HDF5 / SAPHIR NetCDF into the archive CSV layout. |
 | `overview.py` | Writes the status page into the SAPHFIRE 2026 folder. |
+| `pages.py` | Publishes the public copy of the status page to GitHub Pages. |
 | `notify.py` | Sends the email through the local Outlook profile. |
 | `tests/` | Synthetic good and broken files, one per rule. |
 
@@ -70,8 +71,10 @@ Policy decisions beyond the PDF (2026-10-03):
   quantified data without a formula assignment are of no use.
 - Exact zeros are a warning to clarify with the team, not a rejection. Once a team
   has explained a warning, it can be accepted per instrument in
-  `rules.ACKNOWLEDGED_WARNINGS` (PTRMS zeros: values at or below the LOD, confirmed
-  04 Oct 2026); it then shows as INFO and no longer blocks archiving.
+  `rules.ACKNOWLEDGED_WARNINGS`; it then shows as INFO and no longer blocks
+  archiving. Zeros are always accepted for SMPS-AMS, SMPS-WALLE and AETHALOMETER
+  (zero counts / no absorption are real). PTRMS zeros are checked again: after the
+  latest processing updates the PTR data should contain no exact zeros.
 - REJECTED files are deleted from Incoming after the report email has gone out, so
   the team can upload the corrected file under the same name (sciebo upload links
   cannot overwrite). The status page keeps showing "Needs fixing" until then.
@@ -82,6 +85,22 @@ Policy decisions beyond the PDF (2026-10-03):
   token is `H3OCHARON` (the PDF's `NH4CHARON` is a typo, still accepted).
 - Native SAPHIR files keep their names. Blank units, `%`, `C` and zeros in them
   are accepted as is; `name@STDEV` / `@NO_OF_POINTS` companions are not checked.
+- (2026-10-14) HDF5 2-D arrays stored as (bins, time) instead of (time, bins) are
+  accepted (INFO) when the orientation is unambiguous and transposed in the archive
+  copy. CSV rows of only commas (Excel's empty trailing rows) are skipped (INFO).
+
+## Public status page
+
+Besides the copy in sciebo, the watcher publishes the status page to
+**https://ggkatzelis.github.io/2026-SAPHFIRE/** every time it rewrites it
+(`pages.py`: commits `index.html` to the `gh-pages` branch through a separate clone
+in `state/pages`, so the code working copy is never touched). This copy is public:
+it leaves out the sciebo link and the free-text logbook notes, carries a `noindex`
+tag, and is refused if it contains any value from `settings_local.py`. A failed push
+is logged and retried with the next refresh. `SAPHFIRE_2026_Submission_Status.html`
+in sciebo only forwards to this online page (so it is never out of date); the PDF
+snapshot is the offline copy and still carries the sciebo link and the logbook notes. `python pages.py` publishes by hand;
+`PAGES_PUBLISH = False` in `settings.py` switches it off.
 
 Campaign facts the code relies on: the experiment logbook in the workbook is in
 **UTC** (roof times match the SAPHIR `roof_all` signal to the minute); the
@@ -106,7 +125,10 @@ run_watcher.bat                             # run continuously (what Task Schedu
 ```
 
 The watcher pulls new or updated SAPHIR files from Z: every hour (`--no-import` to
-skip), scans Incoming every 60 s and waits until a file has been unchanged for 90 s
+skip). While Z: is unreachable (VPN not connected) it re-tries every 5 min, so the
+import starts by itself once the VPN is up; after 2 h offline it emails one reminder.
+Products that appear on Z: but are neither imported nor ignored in `settings.py`
+(e.g. a newly processed NOx or TOC file) are emailed once each. It also scans Incoming every 60 s and waits until a file has been unchanged for 90 s
 before evaluating it. Files that arrive together go out as one email. A file
 that is replaced (size or time changes) is evaluated again. Log:
 `state/watcher.log`.

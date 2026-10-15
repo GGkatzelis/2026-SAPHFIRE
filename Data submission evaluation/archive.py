@@ -20,6 +20,7 @@ REJECTED and NEEDS CONFIRMATION files stay in Incoming (= pending).
     python archive.py                        # archive everything ACCEPTED
     python archive.py --approve 2026-06-30.PTRMS.FZJ.csv   # archive a NEEDS CONFIRMATION file
     python archive.py --status-only          # just rebuild the status page
+    python archive.py --rebuild              # regenerate all harmonised CSVs from the originals
 """
 from __future__ import annotations
 
@@ -108,6 +109,40 @@ def _write_atomic(path: Path, text: str) -> None:
 
 
 # --- archiving -------------------------------------------------------------------
+def _provenance(name, digest, version, archived_utc, verdict, how, rep) -> list[str]:
+    exp = campaign.experiment_for(rep.date) if rep.date else None
+    lines = [
+        f"source_file = {name}",
+        f"source_sha256 = {digest}",
+        f"version = {version} (archived {archived_utc} UTC; history in archive_log.csv)",
+        f"verdict = {verdict}" + (" (approved by hand)" if how == "approved" else ""),
+    ]
+    if exp:
+        lines.append(f"experiment = {exp.label if exp.is_experiment else 'non-experiment day'}"
+                     f": {exp.title} ({', '.join(map(str, exp.days))})")
+    tref = rep.summary.get("time_reference")
+    if tref:
+        lines.append(f"time_reference = {tref} of the averaging interval")
+    return lines
+
+
+def rebuild_harmonised(log=print) -> int:
+    """Regenerate every harmonised CSV from its archived original (same version, no new
+    log row), e.g. after a change in the CSV writer. Values are re-read, never edited."""
+    n = 0
+    for name, row in latest_versions().items():
+        orig = original_path(name)
+        if name.startswith("Metadata.") or not orig.exists():
+            continue
+        rep = evaluate_file(orig, None, [S.ARCHIVE_METADATA])
+        prov = _provenance(name, row["sha256"], row["version"], row["archived_utc"],
+                           row["verdict"], row["how"], rep)
+        _write_atomic(harmonised_path(name), harmonised_text(orig, prov))
+        n += 1
+    log(f"  rebuilt {n} harmonised file(s)")
+    return n
+
+
 def archive_file(src: Path, rep: FileReport, how: str = "auto", log=print) -> dict:
     name = src.name
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -121,19 +156,7 @@ def archive_file(src: Path, rep: FileReport, how: str = "auto", log=print) -> di
         return prev
 
     version = int(prev["version"]) + 1 if prev else 1
-    exp = campaign.experiment_for(rep.date) if rep.date else None
-    provenance = [
-        f"source_file = {name}",
-        f"source_sha256 = {digest}",
-        f"version = {version} (archived {now} UTC; history in archive_log.csv)",
-        f"verdict = {rep.verdict}" + (" (approved by hand)" if how == "approved" else ""),
-    ]
-    if exp:
-        provenance.append(f"experiment = {exp.label if exp.is_experiment else 'non-experiment day'}"
-                          f": {exp.title} ({', '.join(map(str, exp.days))})")
-    tref = rep.summary.get("time_reference")
-    if tref:
-        provenance.append(f"time_reference = {tref} of the averaging interval")
+    provenance = _provenance(name, digest, version, now, rep.verdict, how, rep)
 
     if name.startswith("Metadata."):
         text = src.read_bytes().decode("utf-8-sig", errors="replace").replace("\r\n", "\n")
@@ -257,10 +280,14 @@ def main(argv=None) -> int:
     ap.add_argument("--approve", nargs="+", default=[], metavar="FILE",
                     help="also archive these NEEDS CONFIRMATION files")
     ap.add_argument("--status-only", action="store_true", help="only rebuild the status page")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="regenerate all harmonised CSVs from the archived originals")
     args = ap.parse_args(argv)
 
     import overview
-    if not args.status_only:
+    if args.rebuild:
+        rebuild_harmonised()
+    elif not args.status_only:
         reports = evaluate_incoming()
         done = run_archive(reports, args.approve, args.dry_run)
         pending = [r for r in reports if r.path.exists() and r.path.parent == S.INCOMING]

@@ -98,6 +98,22 @@ def test_decimal_comma_field_count(tmp_path):
     assert "comma-separated fields" in _msgs(rep, "FAIL")
 
 
+def test_trailing_comma_only_rows_skipped(tmp_path):
+    p = _good_csv(tmp_path)
+    p.write_text(p.read_text() + ",,\n" * 5)                 # Excel's empty trailing rows
+    rep = evaluate_file(p, tmp_path)
+    assert rep.verdict == "ACCEPTED", _msgs(rep, "FAIL")
+    assert "5 empty row(s)" in _msgs(rep, "INFO")
+
+
+def test_empty_timestamp_reported_as_text(tmp_path):
+    p = _good_csv(tmp_path)
+    p.write_text(p.read_text() + ",1.0,2.0\n")
+    rep = evaluate_file(p, tmp_path)
+    assert "has empty entries" in _msgs(rep, "FAIL")
+    assert all(isinstance(e, str) for c in rep.checks for e in c.examples)
+
+
 def test_missing_brackets_and_ion_mass(tmp_path):
     rep = evaluate_file(_good_csv(tmp_path, **{"isoprene": 1.0, "mz69.069 [ppbv]": 1.0}), tmp_path)
     fails = _msgs(rep, "FAIL")
@@ -165,12 +181,26 @@ def test_zeros_warn_only(tmp_path):
     assert rep.verdict == "NEEDS CONFIRMATION" and "Exact zeros" in _msgs(rep, "WARN")
 
 
-def test_zeros_acknowledged_for_ptrms_only(tmp_path):
-    """PTRMS zeros were confirmed by the team: INFO with the note, file ACCEPTED."""
+def test_zeros_warn_again_for_ptrms(tmp_path):
+    """PTRMS should no longer deliver exact zeros: they need confirmation again."""
     z = np.r_[np.zeros(50), np.ones(150)]
     rep = evaluate_file(_good_csv(tmp_path, **{"C6H6 [ppbv]": z}), tmp_path)
-    assert rep.verdict == "ACCEPTED", _msgs(rep, "WARN")
-    assert "confirmed by the PTRMS PI" in _msgs(rep, "INFO")
+    assert rep.verdict == "NEEDS CONFIRMATION" and "Exact zeros" in _msgs(rep, "WARN")
+
+
+@pytest.mark.parametrize("token,inst", [("SMPS-AMS", "PATRAS"), ("SMPS-WALLE", "PATRAS"),
+                                        ("AETHALOMETER", "PATRAS")])
+def test_zeros_allowed_for_counting_instruments(tmp_path, token, inst):
+    """Zero counts (SMPS) and zero absorption (aethalometer) are real: INFO, ACCEPTED."""
+    z = np.r_[np.zeros(50), np.ones(150)]
+    name = f"{DAY}.{token}.{inst}.csv"
+    p = _good_csv(tmp_path, name=name, meta=None, **{"N [cm-3]": z})
+    p.write_text(pd.read_csv(p, comment="#")[["time_utc", "N [cm-3]"]].to_csv(index=False))
+    (tmp_path / f"Metadata.{token}.{inst}.txt").write_text(
+        META.replace("PTRMS", token).replace("institution = FZJ", f"institution = {inst}"))
+    rep = evaluate_file(p, tmp_path)
+    assert rep.verdict == "ACCEPTED", _msgs(rep, "WARN") + _msgs(rep, "FAIL")
+    assert "expected for this instrument" in _msgs(rep, "INFO")
 
 
 def test_local_time_spillover(tmp_path):
@@ -283,3 +313,16 @@ def test_h5_good(tmp_path):
 def test_h5_bad(tmp_path, kw, expect):
     rep = evaluate_file(_h5(tmp_path, **kw), tmp_path)
     assert rep.verdict == "REJECTED" and expect in _msgs(rep, "FAIL")
+
+
+def test_h5_bins_by_time_accepted(tmp_path):
+    """(bins, time) instead of (time, bins) is accepted and noted, not rejected."""
+    import h5py
+    p = _h5(tmp_path)
+    with h5py.File(p, "a") as f:
+        d = f["dNdlogDp"][()]
+        del f["dNdlogDp"]
+        f.create_dataset("dNdlogDp", data=d.T).attrs["units"] = "cm-3"
+    rep = evaluate_file(p, tmp_path)
+    assert rep.verdict == "ACCEPTED", _msgs(rep, "FAIL") + _msgs(rep, "WARN")
+    assert "(bins, time)" in _msgs(rep, "INFO")

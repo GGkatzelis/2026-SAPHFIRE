@@ -71,7 +71,7 @@ def _collect(known_verdicts=None):
     return rows, arch, pend, archived, pending
 
 
-def _cell(row, exp, arch, pend, sheet_status):
+def _cell(row, exp, arch, pend, sheet_status, public=False):
     label, sheet, keys = row
     days = exp.days
     arch_rows = [r for d in days for k in keys for r in arch.get((k, d), [])]
@@ -82,7 +82,8 @@ def _cell(row, exp, arch, pend, sheet_status):
     if sheet and sheet in sheet_status:
         sts = [sheet_status[sheet].get(d, ("unknown", "")) for d in days]
         expected = exp.is_experiment and any(s not in ("not running", "no experiment") for s, _ in sts)
-        notes = [f"{d:%d %b}: {s}" + (f" ({' '.join(n.split())})" if n else "")
+        # the free-text logbook notes stay private (the workbook is not public)
+        notes = [f"{d:%d %b}: {s}" + (f" ({' '.join(n.split())})" if n and not public else "")
                  for d, (s, n) in zip(days, sts)]
     else:                       # SAPHIR/meteo rows, or an instrument not in the workbook
         expected = exp.is_experiment
@@ -147,7 +148,6 @@ thead th{background:var(--head);font-size:12px;font-weight:600;position:sticky;t
 th.inst,td.inst{text-align:left;position:sticky;left:0;background:var(--bg);white-space:nowrap;z-index:1}
 thead th.inst{background:var(--head);z-index:2}
 th .d{display:block;color:var(--muted);font-weight:400;font-size:11px}
-th.nonexp{color:var(--muted);font-weight:400}
 td.c{font-size:12px;min-width:84px;line-height:1.2}
 td.c small{display:block;font-size:10.5px;opacity:.85}
 .done{background:var(--done);color:var(--done-fg)}.partial{background:var(--partial);color:var(--partial-fg)}
@@ -167,16 +167,18 @@ main{max-width:none;padding:0}td.c{min-width:0}}
 """
 
 
-def render(known_verdicts=None, theme: str | None = None) -> str:
-    """``theme='light'`` pins the light colours (used for the PDF snapshot)."""
+def render(known_verdicts=None, theme: str | None = None, public: bool = False) -> str:
+    """``theme='light'`` pins the light colours (used for the PDF snapshot).
+    ``public=True`` is the GitHub Pages copy: no sciebo link, no logbook notes."""
     rows, arch, pend, archived, pending = _collect(known_verdicts)
-    exps = campaign.experiments()
+    # experiments only (background experiments included); integration, calibration
+    # and no-experiment days are left out
+    exps = campaign.experiments(only_experiments=True)
     sheet = campaign.instrument_status()
     now = dt.datetime.now(dt.timezone.utc)
 
     head = '<th class="inst">Instrument</th>' + "".join(
-        f'<th class="{"" if e.is_experiment else "nonexp"}" title="{_e(e.title)}">'
-        f'{_e(e.label if e.is_experiment else e.short_name.replace("-", " "))}'
+        f'<th title="{_e(e.title)}">{_e(e.label)}'
         f'<span class="d">{e.start:%d %b}{"+" + str(len(e.days) - 1) if len(e.days) > 1 else ""}</span></th>'
         for e in exps) + '<th>Last update</th>'
 
@@ -184,9 +186,9 @@ def render(known_verdicts=None, theme: str | None = None) -> str:
     for row in rows:
         cells, last_row = [], ""
         for e in exps:
-            state, text, sub, tip, last = _cell(row, e, arch, pend, sheet)
+            state, text, sub, tip, last = _cell(row, e, arch, pend, sheet, public)
             last_row = max(last_row, last)
-            if e.is_experiment and state not in ("notrun", "none"):
+            if state not in ("notrun", "none"):
                 n_cells += 1
                 n_done += state == "done"
                 n_missing += state == "missing"
@@ -208,14 +210,24 @@ def render(known_verdicts=None, theme: str | None = None) -> str:
     legend = "".join(f'<span class="{k}">{_e(v)}</span>' for k, v in STATE_TEXT.items() if v)
 
     theme_attr = f' data-theme="{theme}"' if theme else ""
+    robots = '\n<meta name="robots" content="noindex, nofollow">' if public else ""
+    folder = ("Campaign folder: the sciebo link and access code are in the submission "
+              "instructions."
+              + (f' Online, always current: <a href="{_e(S.PAGES_URL)}">{_e(S.PAGES_URL)}</a>.'
+                 if S.PAGES_PUBLISH else "") if public else
+              f'Campaign folder: <a href="{_e(S.SCIEBO_SHARE_URL)}">{_e(S.SCIEBO_SHARE_URL)}</a> '
+              "(access code from the submission instructions). This page is also available there "
+              f"as <code>{_e(S.STATUS_PDF.name)}</code>, which opens directly in the browser."
+              + (f' Always-current copy: <a href="{_e(S.PAGES_URL)}">{_e(S.PAGES_URL)}</a>.'
+                 if S.PAGES_PUBLISH else ""))
     return f"""<!doctype html>
 <html lang="en"{theme_attr}><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">{robots}
 <title>SAPHFIRE 2026 Submission Status</title><style>{CSS}</style></head>
 <body><main>
 <h1>SAPHFIRE 2026 data submission status</h1>
 <p class="sub">Updated automatically {now:%d %b %Y, %H:%M} UTC. Instruments against experiments; hover a cell
-for the files, versions and the instrument notes from the campaign log.</p>
+for the files, versions and the instrument {"status" if public else "notes"} from the campaign log.</p>
 <div class="cards">
 <div class="card"><b>{len(archived)}</b><span>files archived</span></div>
 <div class="card"><b>{len(pending)}</b><span>files pending in Incoming</span></div>
@@ -225,13 +237,11 @@ for the files, versions and the instrument notes from the campaign log.</p>
 <div class="scroll"><table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>
 <div class="legend">{legend}</div>
 <p class="sub" style="margin-top:8px">"Missing" means the campaign log lists the instrument as running
-but no file has been archived yet. "Not running" comes from the same log. Greyed columns are days
-without an experiment; data from them are welcome but not required.</p>
+but no file has been archived yet. "Not running" comes from the same log. Only experiments are shown;
+data from integration and calibration days are welcome but not required.</p>
 <h2>Pending in Incoming-Upload</h2><ul class="files">{pend_list}</ul>
 <h2>Recently archived</h2><ul class="files">{recent_list}</ul>
-<footer>Campaign folder: <a href="{_e(S.SCIEBO_SHARE_URL)}">{_e(S.SCIEBO_SHARE_URL)}</a>
-(access code from the submission instructions). This page is also available there as
-<code>{_e(S.STATUS_PDF.name)}</code>, which opens directly in the browser.<br>Harmonised copies are in <code>Archive-Download/&lt;date&gt;_&lt;experiment&gt;/</code>, the
+<footer>{folder}<br>Harmonised copies are in <code>Archive-Download/&lt;date&gt;_&lt;experiment&gt;/</code>, the
 untouched originals in <code>Archive-Download/_Originals/</code>, and every version in
 <code>Archive-Download/archive_log.csv</code>. Submission rules:
 <code>SAPHFIRE_2026_Data_Submission_Format.pdf</code>.</footer>
@@ -260,8 +270,30 @@ def _pdf_snapshot(html_text: str) -> bytes | None:
     return pdf.read_bytes() if pdf.exists() and pdf.stat().st_size else None
 
 
+def redirect_page() -> str:
+    url = _e(S.PAGES_URL)
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="0; url={url}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAPHFIRE 2026 Submission Status</title>
+<script>location.replace("{url}");</script>
+<style>body{{font-family:Segoe UI,Arial,sans-serif;margin:40px 16px;background:#fff;color:#1f2328}}
+a{{color:#0b5cad}}</style></head>
+<body><h1>SAPHFIRE 2026 data submission status</h1>
+<p>Opening the live status page: <a href="{url}">{url}</a></p></body></html>
+"""
+
+
 def write_status_page(known_verdicts=None) -> Path:
-    _write_in_place(S.STATUS_HTML, render(known_verdicts).encode("utf-8"))
+    public = render(known_verdicts, public=True)
+    if S.PAGES_PUBLISH:
+        # the sciebo HTML only forwards to the online page, so it is never out of date
+        _write_in_place(S.STATUS_HTML, redirect_page().encode("utf-8"))
+        import pages
+        pages.publish(public)
+    else:
+        _write_in_place(S.STATUS_HTML, public.encode("utf-8"))
     try:
         pdf = _pdf_snapshot(render(known_verdicts, theme="light"))
         if pdf:

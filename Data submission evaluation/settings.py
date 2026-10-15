@@ -28,6 +28,13 @@ STATUS_HTML = SCIEBO_ROOT / "SAPHFIRE_2026_Submission_Status.html"
 # PDF snapshot of the same page: sciebo's web viewer shows PDFs in the browser
 # (HTML is only downloaded), so this is the version that works from a share link.
 STATUS_PDF = SCIEBO_ROOT / "SAPHFIRE_2026_Submission_Status.pdf"
+# Public copy of the status page on GitHub Pages (branch gh-pages of this repository),
+# pushed from a separate clone in state/pages whenever the page is rewritten. That copy
+# leaves out the sciebo link and the logbook notes.
+PAGES_PUBLISH = True
+PAGES_REMOTE = "https://github.com/GGkatzelis/2026-SAPHFIRE.git"
+PAGES_BRANCH = "gh-pages"
+PAGES_URL = "https://ggkatzelis.github.io/2026-SAPHFIRE/"
 EDGE = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
 
 # Which verdicts are archived automatically. NEEDS CONFIRMATION files stay in
@@ -58,6 +65,8 @@ SAPHIR_IGNORED_PRODUCTS = ("SAPHIR.air.all_param", "SAPHIR.usa.all_param",
                            "SAPHIR.sps.all_param.10sec", "SAPHIR.sps.all_param.60sec",
                            "PLUS.sps.all_param.10sec")
 SAPHIR_IMPORT_EVERY_MIN = 60    # the watcher re-checks Z: this often
+SAPHIR_RETRY_MIN = 5            # ...and this often while Z: is unreachable (VPN not up)
+Z_OFFLINE_EMAIL_HOURS = 2       # email a reminder once Z: has been unreachable this long
 
 # Local outputs (git-ignored). Nothing here is ever written to sciebo.
 REPORT_DIR = HERE / "reports"

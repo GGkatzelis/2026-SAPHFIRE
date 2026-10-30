@@ -239,3 +239,13 @@ def test_h5_bins_by_time_transposed(tmp_path):
     lines = [l for l in harmonised_text(p, []).splitlines() if not l.startswith("#")]
     assert lines[0] == "time_utc,dNdlogDp 10nm [cm-3],dNdlogDp 20nm [cm-3],dNdlogDp 40nm [cm-3]"
     assert lines[1] == f"{DAY} 06:00:00,1,3,5"
+
+
+def test_thermogram_harmonised_unchanged(tmp_path):
+    from harmonise import harmonised_text
+    p = tmp_path / f"{DAY}.AMS-THERMOGRAM.PATRAS.csv"
+    body = ("period_start_utc,period_end_utc,TD_temperature [degC],MFR_Org [1]\n"
+            f"{DAY} 08:00:00,{DAY} 11:00:00,100,0.71\n")
+    p.write_text(body)
+    lines = [l for l in harmonised_text(p, []).splitlines() if not l.startswith("#")]
+    assert lines == body.strip().split("\n")

@@ -60,6 +60,13 @@ def test_good_metadata_accepted(tmp_path):
     assert rep.verdict == "ACCEPTED", _msgs(rep, "FAIL") + _msgs(rep, "WARN")
 
 
+def test_time_reference_end_accepted(tmp_path):
+    _good_csv(tmp_path, meta=META.replace("time_reference = start", "time_reference = end"))
+    rep = evaluate_file(tmp_path / "Metadata.PTRMS.FZJ.txt", tmp_path)
+    assert rep.verdict == "ACCEPTED", _msgs(rep, "FAIL") + _msgs(rep, "WARN")
+    assert "interval end" in _msgs(rep, "PASS")
+
+
 @pytest.mark.parametrize("name", ["2026-07-02_PTRMS_FZJ.csv", "2026-07-02.PTRMS.FZJ.v2.csv",
                                   "02.07.2026.PTRMS.FZJ.csv", "2026-07-02.PTR-MS.FZJ.csv",
                                   "2026-07-02.ptrms.FZJ.csv"])
@@ -271,11 +278,11 @@ def test_metadata_two_institutions(tmp_path):
 def test_metadata_problems(tmp_path):
     p = tmp_path / "Metadata.PTRMS.FZJ.txt"
     p.write_text("instrument = PTRMS\ninstitution = UOW\npi_name = X\npi_email = x@uow.edu.au\n"
-                 "coauthors = G. Gkatzelis <g@fz-juelich.de>; Someone\ntime_reference = end\n")
+                 "coauthors = G. Gkatzelis <g@fz-juelich.de>; Someone\ntime_reference = later\n")
     rep = evaluate_file(p, tmp_path)
     fails, warns = _msgs(rep, "FAIL"), _msgs(rep, "WARN")
     assert "does not include the filename token" in fails
-    assert "'start' or 'centre'" in fails
+    assert "'start', 'centre' or 'end'" in fails
     assert "Full Name <email>" in fails
     assert "initials" in warns
 
@@ -326,3 +333,104 @@ def test_h5_bins_by_time_accepted(tmp_path):
     rep = evaluate_file(p, tmp_path)
     assert rep.verdict == "ACCEPTED", _msgs(rep, "FAIL") + _msgs(rep, "WARN")
     assert "(bins, time)" in _msgs(rep, "INFO")
+
+
+def test_instrument_notes_by_day():
+    import datetime as dt
+    import rules as R
+    assert R.instrument_notes("SMPS-WALLE", dt.date(2026, 7, 12))[0][0] == "not running"
+    assert R.instrument_notes("SMPS-WALLE", dt.date(2026, 7, 1)) == []
+    assert all(st == "" for st, _ in R.instrument_notes("SMPS-WALLE"))   # campaign-wide notes
+    for notes in R.INSTRUMENT_NOTES.values():
+        for d0, d1, st, _ in notes:
+            assert (d0 is None) == (d1 is None) and st in ("", "running", "issue", "not running")
+
+
+# --- thermograms ------------------------------------------------------------------
+def _thermogram(tmp: Path, rows=None, header=None) -> Path:
+    (tmp / "Metadata.AMS.PATRAS.txt").write_text(
+        META.replace("PTRMS", "AMS").replace("institution = FZJ", "institution = PATRAS"))
+    header = header or "period_start_utc,period_end_utc,TD_temperature [degC],MFR_Org [1],MFR_Org_STDEV [1]"
+    rows = rows or [f"{DAY} 08:00:00,{DAY} 11:00:00,{t},{f},0.02"
+                    for t, f in [(25, 1.0), (60, 0.9), (100, 0.71), (150, 0.4)]]
+    p = tmp / f"{DAY}.AMS-THERMOGRAM.PATRAS.csv"
+    p.write_text("\n".join([header, *rows]) + "\n")
+    return p
+
+
+def test_thermogram_good(tmp_path):
+    rep = evaluate_file(_thermogram(tmp_path), tmp_path)
+    assert rep.verdict == "ACCEPTED", _msgs(rep, "FAIL") + _msgs(rep, "WARN")
+    assert "Metadata.AMS.PATRAS.txt" in _msgs(rep, "PASS")       # the instrument's metadata
+
+
+@pytest.mark.parametrize("kw,expect", [
+    ({"header": "time_utc,TD_temperature [degC],MFR_Org [1]"}, "must start with the columns"),
+    ({"rows": [f"{DAY} 08:00:00,{DAY} 11:00:00,100,0.7,0.02"] * 2}, "repeat the same period"),
+    ({"rows": [f"{DAY} 11:00:00,{DAY} 08:00:00,100,0.7,0.02"]}, "end at or before"),
+])
+def test_thermogram_bad(tmp_path, kw, expect):
+    rep = evaluate_file(_thermogram(tmp_path, **kw), tmp_path)
+    assert rep.verdict == "REJECTED" and expect in _msgs(rep, "FAIL")
+
+
+def test_thermogram_single_run_needs_its_start(tmp_path):
+    rep = evaluate_file(_thermogram(tmp_path, rows=[f"{DAY} 15:00:00,{DAY} 15:00:00,100,0.7,0.02"]),
+                        tmp_path)
+    assert "same start and end time" in _msgs(rep, "FAIL")
+
+
+@pytest.mark.parametrize("day,step,ok", [("2026-06-30", 180, True), ("2026-07-02", 180, False),
+                                         ("2026-07-02", 64, True)])
+def test_ams_earlier_integration_time(tmp_path, day, step, ok):
+    (tmp_path / "Metadata.AMS.PATRAS.txt").write_text(
+        META.replace("PTRMS", "AMS").replace("institution = FZJ", "institution = PATRAS")
+        .replace("integration_time_s = 10", "integration_time_s = 60"))
+    t = _times(step=step, start=f"{day} 06:00:00")
+    p = tmp_path / f"{day}.AMS.PATRAS.csv"
+    pd.DataFrame({"time_utc": t, "Org [ug m-3]": np.linspace(1, 5, len(t))}).to_csv(p, index=False)
+    rep = evaluate_file(p, tmp_path)
+    assert ("differs from integration_time_s" not in _msgs(rep, "WARN")) == ok
+    if ok and step == 180:
+        assert "180 s reported until 2026-07-01 09:14" in _msgs(rep, "PASS")
+
+
+def test_thermogram_fraction_out_of_range_warns(tmp_path):
+    rep = evaluate_file(_thermogram(tmp_path, rows=[f"{DAY} 08:00:00,{DAY} 11:00:00,100,3.0,0.02"]),
+                        tmp_path)
+    assert "outside" in _msgs(rep, "WARN")
+
+
+def test_old_amstd_token_warns(tmp_path):
+    p = _good_csv(tmp_path, name=f"{DAY}.AMSTD.PATRAS.csv", meta=None)
+    (tmp_path / "Metadata.AMSTD.PATRAS.txt").write_text(
+        META.replace("PTRMS", "AMSTD").replace("institution = FZJ", "institution = PATRAS"))
+    rep = evaluate_file(p, tmp_path)
+    assert "Please use AMS" in _msgs(rep, "WARN")
+
+
+def _spectra(tmp: Path, fractions=None, header=None, periods=2) -> Path:
+    (tmp / "Metadata.AMS.PATRAS.txt").write_text(
+        META.replace("PTRMS", "AMS").replace("institution = FZJ", "institution = PATRAS"))
+    header = header or "period_start_utc,period_end_utc,mz [1],OA_fraction [1]"
+    fractions = fractions or [0.5, 0.3, 0.2, 0.0]
+    spans = [(f"{DAY} 08:00:00", f"{DAY} 11:00:00"), (f"{DAY} 12:00:00", f"{DAY} 16:00:00")]
+    rows = [f"{a},{b},{mz},{f}" for a, b in spans[:periods]
+            for mz, f in zip([43, 44, 57, 60], fractions)]
+    p = tmp / f"{DAY}.AMS-SPECTRA.PATRAS.csv"
+    p.write_text("\n".join([header, *rows]) + "\n")
+    return p
+
+
+def test_spectra_good(tmp_path):
+    rep = evaluate_file(_spectra(tmp_path), tmp_path)      # the zero fraction is accepted
+    assert rep.verdict == "ACCEPTED", _msgs(rep, "FAIL") + _msgs(rep, "WARN")
+    assert "2 period(s)" in _msgs(rep, "PASS")
+
+
+def test_spectra_layout_and_sum(tmp_path):
+    rep = evaluate_file(_spectra(tmp_path, header="period_start_utc,period_end_utc,mz,frac [1]"),
+                        tmp_path)
+    assert "must start with the columns" in _msgs(rep, "FAIL")
+    rep = evaluate_file(_spectra(tmp_path, fractions=[0.5, 0.3, 0.6, 0.0]), tmp_path)
+    assert "do not add up to about 1" in _msgs(rep, "WARN")

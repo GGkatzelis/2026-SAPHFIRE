@@ -78,17 +78,29 @@ def _cell(row, exp, arch, pend, sheet_status, public=False):
     arch_days = {d for d in days for k in keys if (k, d) in arch}
     pend_items = [p for d in days for k in keys for p in pend.get((k, d), [])]
 
+    # status per day: the workbook, overridden by what the team reported (rules.INSTRUMENT_NOTES)
+    known = sheet and sheet in sheet_status
+    sts = {d: sheet_status[sheet].get(d, ("unknown", "")) if known else ("unknown", "")
+           for d in days}
+    team = {d: [n for k in keys for n in R.instrument_notes(k, d)] for d in days}
+    for d, reported in team.items():
+        if reported:
+            sts[d] = (reported[-1][0], sts[d][1])
+    flagged = any(st in ("issue", "not running") for ns in team.values() for st, _ in ns)
+    expected_days = {d for d in days if sts[d][0] not in ("not running", "no experiment")}
+    expected = exp.is_experiment and bool(expected_days)
     notes = []
-    if sheet and sheet in sheet_status:
-        sts = [sheet_status[sheet].get(d, ("unknown", "")) for d in days]
-        expected = exp.is_experiment and any(s not in ("not running", "no experiment") for s, _ in sts)
-        # the free-text logbook notes stay private (the workbook is not public)
-        notes = [f"{d:%d %b}: {s}" + (f" ({' '.join(n.split())})" if n and not public else "")
-                 for d, (s, n) in zip(days, sts)]
-    else:                       # SAPHIR/meteo rows, or an instrument not in the workbook
-        expected = exp.is_experiment
+    for d in days:
+        s, n = sts[d]
+        # the free-text logbook notes stay private (the workbook is not public);
+        # the team-reported notes are written for everyone
+        detail = [x for _, x in team[d]] or ([" ".join(n.split())] if n and not public else [])
+        if known or team[d]:
+            notes.append(f"{d:%d %b}: {s}" + (f" ({' '.join(detail)})" if detail else ""))
 
-    if len(arch_days) == len(days):
+    if exp.is_experiment and not expected_days and any(team.values()):
+        state = "notrun"        # reported not measuring (a file may hold data from before)
+    elif arch_days and arch_days >= expected_days:
         state = "done"
     elif arch_days:
         state = "partial"
@@ -108,7 +120,7 @@ def _cell(row, exp, arch, pend, sheet_status, public=False):
     if state in ("done", "partial"):
         sub = dt.datetime.fromisoformat(last).strftime("%d %b") if last else ""
         if state == "partial":
-            text = f"{len(arch_days)}/{len(days)} days"
+            text = f"{len(arch_days)}/{len(expected_days)} days"
         if version > 1:
             sub += f" · v{version}"
     if pend_items and arch_days:
@@ -117,7 +129,34 @@ def _cell(row, exp, arch, pend, sheet_status, public=False):
     tip += [f"archived: {r['file']} v{r['version']} ({r['archived_utc']} UTC)" for r in arch_rows]
     tip += [f"submitted: {f} ({v.lower()})" for f, v, _ in pend_items]
     tip += notes
+    if flagged and state != "notrun":
+        text += " " + FLAG
     return state, text, sub, "\n".join(tip), last
+
+
+FLAG = "⚠"                 # cell has a reported data gap or instrument issue
+
+
+def _notes_section(rows) -> str:
+    """Team-reported data availability, per instrument (public)."""
+    items = []
+    for label, _, keys in rows:
+        notes = [(d0, d1, n) for k in keys for d0, d1, _, n in R.INSTRUMENT_NOTES.get(k, [])]
+        if not notes:
+            continue
+        lines = "".join(
+            f"<li>{'<b>' + _e(_span(d0, d1)) + ':</b> ' if d0 else ''}{_e(n)}</li>"
+            for d0, d1, n in notes)
+        items.append(f"<h3>{_e(label)}</h3><ul class=\"files\">{lines}</ul>")
+    if not items:
+        return ""
+    return ('<h2 id="notes">Instrument notes from the teams</h2>'
+            f'<p class="sub">Data gaps and instrument problems as reported by the teams (times in '
+            f'UTC). Cells marked {FLAG} are affected.</p>' + "".join(items))
+
+
+def _span(d0: dt.date, d1: dt.date) -> str:
+    return f"{d0:%d %b}" if d0 == d1 else f"{d0:%d %b} to {d1:%d %b}"
 
 
 CSS = """
@@ -136,7 +175,7 @@ CSS = """
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif}
 main{max-width:1500px;margin:0 auto;padding:24px 16px 48px}
-h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:28px 0 8px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:28px 0 8px}h3{font-size:14px;margin:14px 0 4px}
 .sub{color:var(--muted);margin:0 0 16px}
 .cards{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
 .card{border:1px solid var(--line);border-radius:6px;padding:8px 14px;min-width:150px}
@@ -208,6 +247,7 @@ def render(known_verdicts=None, theme: str | None = None, public: bool = False) 
         f"<li><code>{_e(r['file'])}</code> v{_e(r['version'])}, {_e(r['archived_utc'][:16])} UTC</li>"
         for r in recent) or "<li>Nothing archived yet.</li>"
     legend = "".join(f'<span class="{k}">{_e(v)}</span>' for k, v in STATE_TEXT.items() if v)
+    legend += f'<span>{FLAG} data gaps / instrument issue</span>'
 
     theme_attr = f' data-theme="{theme}"' if theme else ""
     robots = '\n<meta name="robots" content="noindex, nofollow">' if public else ""
@@ -237,8 +277,11 @@ for the files, versions and the instrument {"status" if public else "notes"} fro
 <div class="scroll"><table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table></div>
 <div class="legend">{legend}</div>
 <p class="sub" style="margin-top:8px">"Missing" means the campaign log lists the instrument as running
-but no file has been archived yet. "Not running" comes from the same log. Only experiments are shown;
+but no file has been archived yet. "Not running" comes from the same log or from the team's report.
+{FLAG} marks data gaps or instrument problems reported by the team, see
+<a href="#notes">Instrument notes</a>. Only experiments are shown;
 data from integration and calibration days are welcome but not required.</p>
+{_notes_section(rows)}
 <h2>Pending in Incoming-Upload</h2><ul class="files">{pend_list}</ul>
 <h2>Recently archived</h2><ul class="files">{recent_list}</ul>
 <footer>{folder}<br>Harmonised copies are in <code>Archive-Download/&lt;date&gt;_&lt;experiment&gt;/</code>, the

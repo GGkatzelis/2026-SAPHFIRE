@@ -28,7 +28,7 @@ SAPHFIRE 2026/
 **Archive format** (one format for everything): CSV in the submission layout,
 `time_utc` first, `quantity [unit]` columns, provenance header lines (#) with
 source file, SHA-256, version, experiment and time reference. Values and
-timestamps are never changed (start or centre exactly as delivered, stated in
+timestamps are never changed (start, centre or end exactly as delivered, stated in
 the header); only unit labels are made ASCII (`cm!U-3!N` -> `cm-3`, `°C` ->
 `degC`, blank -> `1`). SAPHIR `@STDEV` becomes `<name>_STDEV`; `@NO_OF_POINTS`
 and `@INTERVAL_T` are dropped. HDF5 size distributions get one column per bin.
@@ -42,7 +42,7 @@ creates no new version.
 
 | File | What it does |
 |---|---|
-| `rules.py` | Every rule from the PDF: tokens, units, filename pattern, metadata keys. Edit here to add a token. |
+| `rules.py` | Every rule from the PDF: tokens, units, filename pattern, metadata keys. Edit here to add a token. Also the per-instrument exceptions: accepted warnings (`ACKNOWLEDGED_WARNINGS`), team notes for the public page (`INSTRUMENT_NOTES`), period files (`PERIOD_FILES`), token aliases and integration-time changes (`INTEGRATION_TIME_HISTORY`). |
 | `settings.py` | Paths on this PC (sciebo Incoming/Archive, Z: SAPHIR data), email recipient, polling interval. |
 | `campaign.py` | Reads the experiment calendar and per-day instrument status from `SAPHFIRE 2026 - Experiments and Instrument Status.xlsx` (repo root). `python campaign.py` prints the matrix. |
 | `import_saphir.py` | For every campaign day on `Z:\IEK8-SAPHIR\data\YYYY\MM\DD`: copies `SAPHIR.collected`, `ASS_METEO`, `SAPHIR.LIF.ROx` and `SAPHIR.LP_LIF.kOH` unmodified into Incoming, merges the 40 photolysis-frequency files into one `YYYY-MM-DD.JVALUES.FZJ.csv`, re-copies/rebuilds whatever changed on Z:, and reports products it does not know yet. `--inventory` prints what exists per day. |
@@ -72,8 +72,9 @@ Policy decisions beyond the PDF (2026-10-03):
 - Exact zeros are a warning to clarify with the team, not a rejection. Once a team
   has explained a warning, it can be accepted per instrument in
   `rules.ACKNOWLEDGED_WARNINGS`; it then shows as INFO and no longer blocks
-  archiving. Zeros are always accepted for SMPS-AMS, SMPS-WALLE and AETHALOMETER
-  (zero counts / no absorption are real). PTRMS zeros are checked again: after the
+  archiving. Zeros are always accepted for SMPS-AMS, SMPS-WALLE, CPC-WALLE, AETHALOMETER
+  and AMS (zero counts / no absorption are real; AMS zeros come from the software and
+  the time series goes negative anyway). PTRMS zeros are checked again: after the
   latest processing updates the PTR data should contain no exact zeros.
 - REJECTED files are deleted from Incoming after the report email has gone out, so
   the team can upload the corrected file under the same name (sciebo upload links
@@ -88,6 +89,31 @@ Policy decisions beyond the PDF (2026-10-03):
 - (2026-10-14) HDF5 2-D arrays stored as (bins, time) instead of (time, bins) are
   accepted (INFO) when the orientation is unambiguous and transposed in the archive
   copy. CSV rows of only commas (Excel's empty trailing rows) are skipped (INFO).
+
+**Instrument notes** (data gaps, failures, raw vs corrected) reported by the teams
+go into `rules.INSTRUMENT_NOTES`, in English, because they appear on the public page.
+They override the workbook for the days they cover: "not running" days are not
+expected (the cell shows "Not running" instead of "Missing"), and "issue" days mark
+the cell with ⚠ and are listed under *Instrument notes from the teams*.
+
+**AMS (2026-10-26):** the AMS time-series file (`AMS`, old PDF token `AMSTD` still
+accepted with a warning) holds chamber (bypass) data only. Thermodenuder results go
+into a separate CSV per day, `YYYY-MM-DD.AMS-THERMOGRAM.PATRAS.csv`, one row per TD
+temperature per averaging period:
+`period_start_utc, period_end_utc, TD_temperature [degC], MFR_Org [1], MFR_Org_STDEV [1], ...`.
+Period-averaged mass spectra go into a third CSV, `YYYY-MM-DD.AMS-SPECTRA.PATRAS.csv`,
+one row per m/z per period: `period_start_utc, period_end_utc, mz [1], OA_fraction [1]`.
+Both are *period files* (`rules.PERIOD_FILES`: any `<instrument>-THERMOGRAM` or
+`<instrument>-SPECTRA` token). Checks: the layout, period end after start, no repeated
+period + axis value, fractions remaining within 0 to 1.5 (thermograms) or each spectrum
+adding up to 0.9 to 1.1 (spectra); zero fractions are accepted. They use the
+instrument's own metadata file (`Metadata.AMS.PATRAS.txt`).
+
+AMS timestamps mark the end of each run (`time_reference = end`). The integration time
+was 180 s until 2026-07-01 09:14 UTC and 60 s (+4 s saving) afterwards; the metadata
+says 60, and `rules.INTEGRATION_TIME_HISTORY` lets the earlier files step at 180 s
+without a warning. A period with the same start and end time is rejected: a single
+run is given as its own start and end (start = end - integration time).
 
 ## Public status page
 
@@ -147,6 +173,10 @@ Start-ScheduledTask -TaskName "SAPHFIRE upload watcher"     # start now
 Stop-ScheduledTask  -TaskName "SAPHFIRE upload watcher"     # stop
 Unregister-ScheduledTask -TaskName "SAPHFIRE upload watcher"  # remove
 ```
+Stop the task before editing a module it imports, and start it again afterwards.
+If reports stop, look for `Scan failed` in `state/watcher.log`: a scan fails (and
+is retried every minute) while Outlook cannot create an email, e.g. right after
+log-in before Outlook has started; it recovers by itself.
 To set it up on another PC (PowerShell, no admin needed):
 ```
 $dir = "<repo>\Data submission evaluation"; $py = "<venv>\Scripts\pythonw.exe"

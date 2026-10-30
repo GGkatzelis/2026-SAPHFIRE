@@ -126,6 +126,11 @@ def _evaluate(path: Path, incoming: Path | None, metadata_dirs) -> FileReport:
         _check_data_name(rep)
         meta = _find_metadata(path, rep, metadata_dirs)
     ext = path.suffix.lower()
+    suffix = R.period_suffix(rep.instrument)
+    if suffix and ext != ".csv":
+        rep.add(R2, "FAIL", f"{suffix[1:].title()} files must be CSV (one row per "
+                f"{R.PERIOD_FILES[suffix][0].split(' [')[0]} per period).")
+        return rep
     try:
         if ext == ".csv":
             _validate_csv(rep, meta)
@@ -158,9 +163,10 @@ def _check_tokens(rep: FileReport, instrument: str, institution: str):
     if instrument in R.INSTRUMENTS:
         rep.add(R1, "PASS", f"Instrument token '{instrument}' is valid "
                 f"({R.INSTRUMENTS[instrument][0]}).")
-        if instrument == "NH4CHARON":
-            rep.add(R1, "WARN", "NH4CHARON is the token printed in the PDF by mistake; the "
-                    "instrument is H3O+ CHARON. Please use H3OCHARON.")
+        if instrument in R.TOKEN_ALIASES:
+            new = R.TOKEN_ALIASES[instrument]
+            rep.add(R1, "WARN", f"'{instrument}' is the token printed in the PDF; it has been "
+                    f"replaced by '{new}' ({R.INSTRUMENTS[new][0]}). Please use {new}.")
     else:
         near = [t for t in R.INSTRUMENTS if t.lower() == instrument.lower()
                 or t.replace("-", "") == instrument.upper().replace("-", "")]
@@ -247,7 +253,7 @@ def _find_metadata(path: Path, rep: FileReport, extra_dirs=()) -> dict | None:
     been archived, in ``extra_dirs`` (Archive - Download/Metadata) (Rule 8)."""
     if not (rep.instrument and rep.institution):
         return None
-    name = f"Metadata.{rep.instrument}.{rep.institution}.txt"
+    name = f"Metadata.{R.metadata_instrument(rep.instrument)}.{rep.institution}.txt"
     mpath = next((d / name for d in [path.parent, *map(Path, extra_dirs)] if (d / name).exists()),
                  None)
     if mpath is None:
@@ -265,7 +271,8 @@ def _find_metadata(path: Path, rep: FileReport, extra_dirs=()) -> dict | None:
         rep.summary["time_reference"] = norm.pop()
     fmt = (meta.get("data_format") or "").strip().lower().lstrip(".")
     ext = path.suffix.lower().lstrip(".")
-    if fmt and fmt != ext and not (fmt in {"hdf5", "hdf"} and ext == "h5") \
+    if fmt and fmt != ext and not R.period_suffix(rep.instrument) \
+            and not (fmt in {"hdf5", "hdf"} and ext == "h5") \
             and not (fmt in {"netcdf", "saphir"} and ext == "nc"):
         rep.add(R8, "WARN", f"Metadata says data_format = '{fmt}' but this file is .{ext}.")
     return meta
@@ -506,6 +513,13 @@ def _check_intervals(rep: FileReport, t: pd.Series, meta: dict | None, irregular
             rep.add(R7, "WARN", f"Sampling looks irregular (only {regular:.0%} of steps are within "
                     f"10 % of the median {med:g} s). If each sample has its own interval, add a "
                     "time_utc_end column.")
+        elif integ is not None and (earlier := [
+                (until, s) for until, s in R.INTEGRATION_TIME_HISTORY.get(rep.instrument, [])
+                if t.min() < pd.Timestamp(until) and abs(med - s) <= 0.5 * s + 1]):
+            until, s = earlier[0]
+            rep.add(R7, "PASS", f"Regular sampling ({regular:.0%} of steps at {med:g} s), "
+                    f"consistent with the integration time of {s:g} s reported until "
+                    f"{until:%Y-%m-%d %H:%M} UTC (integration_time_s = {integ:g} afterwards).")
         elif integ is not None and abs(med - integ) > 0.5 * integ + 1:
             rep.add(R7, "WARN", f"Median time step ({med:g} s) differs from integration_time_s "
                     f"= {integ:g} in the metadata. Fine for duty-cycled instruments; otherwise "
@@ -655,6 +669,9 @@ def _validate_csv(rep: FileReport, meta: dict | None):
     dupes = sorted({c for c in cols if cols.count(c) > 1})
     if dupes:
         rep.add(R4, "FAIL", f"{len(dupes)} duplicated column name(s).", dupes)
+    if R.period_suffix(rep.instrument):
+        _validate_period_file(rep, cols, body, bad_rows, ncol)
+        return
     if cols[0] != R.TIME_COL:
         rep.add(R3, "FAIL", f"First column is '{cols[0]}', it must be named exactly "
                 f"'{R.TIME_COL}'.")
@@ -706,6 +723,98 @@ def _validate_csv(rep: FileReport, meta: dict | None):
                 bad_tokens[c] = set(bad.unique()[:10])
             s = num
         data[c] = s.to_numpy(dtype=float)
+    _check_values(rep, data, bad_tokens)
+
+
+def _validate_period_file(rep: FileReport, cols, body, bad_rows, ncol):
+    """Period file (rules.PERIOD_FILES), e.g. <instrument>-THERMOGRAM or -SPECTRA:
+    period start, period end, the axis column (TD temperature, m/z), then the values;
+    one row per axis value per period."""
+    suffix = R.period_suffix(rep.instrument)
+    axis, what = R.PERIOD_FILES[suffix]
+    kind = suffix[1:].lower()
+    need = [*R.PERIOD_COLS, axis]
+    if cols[:len(need)] != need:
+        rep.add(R3, "FAIL", f"A {kind} file must start with the columns "
+                f"{', '.join(need)} (in this order).", [", ".join(cols[:len(need)])])
+        return
+    rep.add(R3, "PASS", f"{kind.title()} layout: period start, period end, {axis}.")
+    dupes = sorted({c for c in cols if cols.count(c) > 1})
+    if dupes:
+        rep.add(R4, "FAIL", f"{len(dupes)} duplicated column name(s).", dupes)
+    data_cols = cols[len(need):]
+    parsed, nobracket = [], []
+    for c in [need[2], *data_cols]:
+        m = R.COLUMN_RE.match(c)
+        if m:
+            parsed.append((c, m["quantity"], m["unit"]))
+        else:
+            nobracket.append(c)
+    if not data_cols:
+        rep.add(R4, "FAIL", f"No data columns after {axis} (the {what} values).")
+    if nobracket:
+        rep.add(R4, "FAIL", f"{len(nobracket)} column(s) have no unit in square brackets "
+                "('quantity [unit]', one space before the bracket).", nobracket)
+    _check_quantities_units(rep, parsed)
+    rep.summary["variables"] = len(data_cols)
+
+    good = [l for _, l in body] if not bad_rows else [body[0][1]] + [
+        l for _, l in body[1:] if l.count(",") + 1 == ncol]
+    df = pd.read_csv(io.StringIO("\n".join(good)), header=0, names=cols if not dupes else None,
+                     dtype={c: str for c in need[:2]}, na_values=sorted(R.MISSING_TOKENS),
+                     keep_default_na=False, skipinitialspace=True, low_memory=False)
+    t0 = _parse_time_text(rep, df.iloc[:, 0], need[0])
+    t1 = _parse_time_text(rep, df.iloc[:, 1], need[1])
+    back = t0.notna() & t1.notna() & (t1 <= t0)
+    if back.any():
+        same = int((back & (t1 == t0)).sum())
+        rep.add(R3, "FAIL", f"{int(back.sum())} period(s) end at or before their start"
+                + (f" ({same} with the same start and end time; a single run still covers "
+                   "its integration time)" if same else "") + ".",
+                [f"{a} -> {b}" for a, b in zip(df.iloc[:, 0][back], df.iloc[:, 1][back])])
+    if rep.date is not None and t0.notna().any():
+        other = sorted({str(d) for d in t0.dropna().dt.date if d != rep.date})
+        if other:
+            rep.add(R1, "WARN", f"Some periods start on another day than the filename "
+                    f"({rep.date}). Please confirm.", other)
+
+    data, bad_tokens = {}, {}
+    for c in [need[2], *data_cols]:
+        s = df[c]
+        if not pd.api.types.is_numeric_dtype(s):
+            num = pd.to_numeric(s, errors="coerce")
+            bad = s[num.isna() & s.notna()].astype(str).str.strip()
+            bad = bad[~bad.isin(R.MISSING_TOKENS)]
+            if len(bad):
+                bad_tokens[c] = set(bad.unique()[:10])
+            s = num
+        data[c] = s.to_numpy(dtype=float)
+    key = pd.DataFrame({"a": df.iloc[:, 0], "b": df.iloc[:, 1], "t": data[need[2]]})
+    dup = key.duplicated(keep=False)
+    if dup.any():
+        rep.add(R3, "FAIL", f"{int(dup.sum())} row(s) repeat the same period and {axis}.",
+                [f"{a} to {b}, {t:g}" for a, b, t in key[dup].drop_duplicates().to_numpy()])
+    else:
+        rep.add(R3, "PASS", f"{len(key)} rows, each period and {axis} appears once "
+                f"({key[['a', 'b']].drop_duplicates().shape[0]} period(s)).")
+    values = [c for c, q, u in parsed[1:] if u == "1" and not q.upper().endswith("STDEV")]
+    if suffix == "-THERMOGRAM":
+        lo, hi = R.FRACTION_RANGE
+        out = [f"{c}: {int(((v < lo) | (v > hi)).sum())} value(s)" for c in values
+               for v in [data[c][np.isfinite(data[c])]] if ((v < lo) | (v > hi)).any()]
+        if out:
+            rep.add(R5, "WARN", f"Fractions remaining outside {lo:g} to {hi:g}. Please confirm.",
+                    out)
+    else:                       # normalised spectra: each period should add up to about 1
+        lo, hi = R.SPECTRUM_SUM
+        out = []
+        for c in values:
+            sums = pd.Series(data[c]).groupby([key["a"], key["b"]]).sum(min_count=1).dropna()
+            out += [f"{c}, {a} to {b}: sum {s:.3g}" for (a, b), s in sums.items()
+                    if not lo <= s <= hi]
+        if out:
+            rep.add(R5, "WARN", f"Normalised spectra that do not add up to about 1 ({lo:g} to "
+                    f"{hi:g}) per period. Please confirm the normalisation.", out)
     _check_values(rep, data, bad_tokens)
 
 
@@ -990,8 +1099,8 @@ def _validate_metadata(rep: FileReport):
         rep.add(R3, "PASS", f"time_reference = '{meta['time_reference']}' -> interval "
                 f"{norm.pop()}.")
     elif tr:
-        rep.add(R3, "FAIL", f"time_reference = '{meta['time_reference']}' must state 'start' or "
-                "'centre' of the averaging interval.")
+        rep.add(R3, "FAIL", f"time_reference = '{meta['time_reference']}' must state 'start', "
+                "'centre' or 'end' of the averaging interval.")
 
     pe = meta.get("pi_email", "")
     if pe and not R.EMAIL_RE.match(pe):

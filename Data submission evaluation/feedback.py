@@ -71,8 +71,8 @@ FIXES: list[tuple[str, str, str]] = [
     (r"Required keys missing", "Metadata keys missing", "Add the listed keys."),
     (r"does not match the filename|does not include the filename token",
      "Metadata does not match the filename", "Use the same tokens as in the filename."),
-    (r"must state 'start' or 'centre'", "time_reference",
-     "Write time_reference = start or time_reference = centre."),
+    (r"must state 'start', 'centre' or 'end'", "time_reference",
+     "Write time_reference = start, centre or end."),
     (r"Full Name <email>", "Coauthor format",
      "List coauthors as 'Full Name <email>', separated by ';'."),
     (r"not initials", "Coauthors given with initials", "Please give full first names."),
@@ -108,6 +108,12 @@ FIXES: list[tuple[str, str, str]] = [
     (r"no integration_time_s", "Integration time missing",
      "Add integration_time_s to the metadata (or a time_utc_end column for irregular samples)."),
     (r"not in increasing order", "Unsorted timestamps", "Please sort the rows by time."),
+    (r"file must start with the columns", "Period file layout",
+     "Start the file with exactly these column names, in this order."),
+    (r"end at or before their start", "Period start and end",
+     "period_start_utc is the start and period_end_utc the end of the averaging period. If "
+     "a period is a single run, give the start and end of that run (with end timestamps: "
+     "start = end - integration time)."),
     (r"outside the campaign|not a campaign day", "Date outside the campaign",
      "Please confirm this is the UTC day of the data."),
     (r"subfolder", "Upload location", "Upload directly into Incoming-Upload, without subfolders."),

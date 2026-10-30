@@ -244,8 +244,10 @@ def evaluate_incoming() -> list[FileReport]:
 
 
 def run_archive(reports: list[FileReport] | None = None, approve=(), dry_run: bool = False,
-                log=print) -> list[dict]:
-    """Archive what qualifies among ``reports`` (default: evaluate all of Incoming)."""
+                log=print, force: bool = False) -> list[dict]:
+    """Archive what qualifies among ``reports`` (default: evaluate all of Incoming).
+    ``force`` lets ``approve`` archive a REJECTED file too, after checking it by hand
+    (a one-off exception, e.g. a real value that happens to equal a fill value)."""
     if reports is None:
         reports = evaluate_incoming()
     approve = set(approve)
@@ -257,11 +259,12 @@ def run_archive(reports: list[FileReport] | None = None, approve=(), dry_run: bo
             continue                                 # gone, or inside a subfolder
         if rep.verdict in S.AUTO_ARCHIVE_VERDICTS:
             how = "auto"
-        elif name in approve and rep.verdict != "REJECTED":
+        elif name in approve and (rep.verdict != "REJECTED" or force):
             how = "approved"
         else:
             if name in approve:
-                log(f"  cannot approve {name}: it is REJECTED (fix the FAIL items first)")
+                log(f"  cannot approve {name}: it is REJECTED (fix the FAIL items first, "
+                    "or --force after checking it)")
             continue
         if dry_run:
             log(f"  would archive  {name} -> {harmonised_path(name).relative_to(S.ARCHIVE)}")
@@ -279,6 +282,8 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--approve", nargs="+", default=[], metavar="FILE",
                     help="also archive these NEEDS CONFIRMATION files")
+    ap.add_argument("--force", action="store_true",
+                    help="with --approve: archive even a REJECTED file (checked by hand)")
     ap.add_argument("--status-only", action="store_true", help="only rebuild the status page")
     ap.add_argument("--rebuild", action="store_true",
                     help="regenerate all harmonised CSVs from the archived originals")
@@ -289,7 +294,7 @@ def main(argv=None) -> int:
         rebuild_harmonised()
     elif not args.status_only:
         reports = evaluate_incoming()
-        done = run_archive(reports, args.approve, args.dry_run)
+        done = run_archive(reports, args.approve, args.dry_run, force=args.force)
         pending = [r for r in reports if r.path.exists() and r.path.parent == S.INCOMING]
         print(f"\n{'would archive' if args.dry_run else 'archived'} {len(done)}, "
               f"pending in Incoming {len(pending) - (len(done) if args.dry_run else 0)}")

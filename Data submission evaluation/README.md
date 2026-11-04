@@ -198,3 +198,10 @@ The repository is public, so three things are **not** in git:
   link and access code. Copy it from the sciebo folder.
 - `../SAPHFIRE 2026 - Experiments and Instrument Status.xlsx`: the experiment
   calendar and instrument status read by `campaign.py`. Place it in the repo root.
+
+The watcher also needs git on PATH (Git for Windows; GitHub Desktop's bundled git
+is not on PATH) for the public page, Outlook for the emails and the Z: drive for
+the SAPHIR import. `settings_local.py` may list several sciebo locations; the first
+that exists is used, so one file works on more than one PC. Several PCs can publish
+the status page (each refresh starts from the online `gh-pages` branch), but run
+the watcher on **one PC only**: two watchers would both email, archive and import.

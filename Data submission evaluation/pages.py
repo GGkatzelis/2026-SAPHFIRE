@@ -53,6 +53,10 @@ def publish(html_text: str) -> bool:
         return False
     try:
         _ensure_clone()
+        # Another PC may have published since: start from the online branch, so the push
+        # is a fast-forward. Nothing is lost, the page is regenerated in full each time.
+        if _git("fetch", "-q", "--depth", "1", "origin", S.PAGES_BRANCH).returncode == 0:
+            _git("reset", "-q", "--hard", "FETCH_HEAD")
         (CLONE / "index.html").write_text(html_text, encoding="utf-8", newline="\n")
         _git("add", "index.html", ".nojekyll")
         if _git("diff", "--cached", "--quiet").returncode != 0:

@@ -3,7 +3,8 @@ pandas
 numpy
 matplotlib
 openpyxl
-streamlit
+streamlit       # the two browser GUIs not yet moved to the desktop format (injection planner, CHARON quicklooks)
+PyQt6           # desktop GUIs (saphfire_gui, data_analysis)
 
 # injection_preparation
 xlrd            # read legacy .xls (SAPHIR LCU workbook)

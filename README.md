@@ -40,6 +40,22 @@ Run it:
 "Data submission evaluation\run_watcher.bat"         (watch + email)
 ```
 
+### [`data_analysis/`](data_analysis/) — analysis of the archived data
+First analysis: **PTR-ToF-MS vs injections**. Turns every logged injection into an
+expected mixing ratio and compares it with the increase the PTR measured before the
+roof opened (per formula, isomers summed), in an offline desktop window (PyQt6) with
+violin, scatter and time-series views.
+
+Run it:
+```
+data_analysis\run_ptr_vs_injections.bat
+```
+
+### [`saphfire_gui/`](saphfire_gui/) — shared desktop GUI pieces
+The format for desktop windows, taken from JUICE: one theme, the loading box, and the
+mouse interaction for matplotlib canvases. New GUIs are built on this (PyQt6 +
+matplotlib, started without a console through `pythonw`), not as browser apps.
+
 ### [`publications/`](publications/) — reference papers
 Open-access ACP papers behind the parameterizations (Gkatzelis 2024, Roberts 2020).
 

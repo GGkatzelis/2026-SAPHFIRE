@@ -269,7 +269,8 @@ def _find_metadata(path: Path, rep: FileReport, extra_dirs=()) -> dict | None:
     norm = {R.TIME_REFERENCE_VALUES[w] for w in words if w in R.TIME_REFERENCE_VALUES}
     if len(norm) == 1:
         rep.summary["time_reference"] = norm.pop()
-    fmt = (meta.get("data_format") or "").strip().lower().lstrip(".")
+    # first word only: "nc (SAPHIR format, unmodified)" is nc
+    fmt = ((meta.get("data_format") or "").strip().lower().split() or [""])[0].lstrip(".")
     ext = path.suffix.lower().lstrip(".")
     if fmt and fmt != ext and not R.period_suffix(rep.instrument) \
             and not (fmt in {"hdf5", "hdf"} and ext == "h5") \
@@ -963,9 +964,13 @@ def _validate_nc(rep: FileReport, meta: dict | None):
     native = "native" in rep.summary
     with netCDF4.Dataset(rep.path) as nc:
         nc.set_auto_mask(True)
+        saphir_format = bool(getattr(nc, "definition_name", "")) and             str(getattr(nc, "name_of_platform", "")).strip().upper() == "SAPHIR"
         if native:
             rep.add(R2, "PASS", "Native SAPHIR NetCDF, read directly (time reference, units and "
                     "fill values come from the file itself).")
+        elif saphir_format:
+            rep.add(R2, "PASS", "Team NetCDF written in the SAPHIR data-system format "
+                    f"(definition '{nc.definition_name}'); accepted like a native SAPHIR file.")
         else:
             rep.add(R2, "WARN", "NetCDF is accepted only as an unmodified SAPHIR data-system file, "
                     "but this filename does not look like one. Team data should be CSV or HDF5.")
@@ -994,12 +999,15 @@ def _validate_nc(rep: FileReport, meta: dict | None):
             rep.summary.update(first=str(t.min()), last=str(t.max()), n_times=len(t))
             days = sorted({d.isoformat() for d in t.dt.date})
             rep.add(R1, "INFO", f"Covers {len(days)} UTC day(s).", days)
-        cols, data, companions = [], {}, 0
+        cols, data, companions, text_vars = [], {}, 0, []
         for name, var in nc.variables.items():
             if name == tvar or var.ndim == 0:
                 continue
             if "@" in name:      # SAPHIR companions: x@STDEV, x@NO_OF_POINTS, time@INTERVAL_T
                 companions += 1
+                continue
+            if var.dtype.kind in "SUO":   # text, e.g. marker labels: no unit, no values to check
+                text_vars.append(name)
                 continue
             cols.append((name, name, str(getattr(var, "units", ""))))
             if var.dtype.kind in "fiu" and var.shape and var.shape[0] == len(v):
@@ -1008,6 +1016,9 @@ def _validate_nc(rep: FileReport, meta: dict | None):
         if companions:
             rep.add(R2, "INFO", f"{companions} companion variable(s) (name@STDEV, @NO_OF_POINTS, "
                     "@INTERVAL_T) are kept but not checked.")
+        if text_vars:
+            rep.add(R4, "INFO", f"{len(text_vars)} text variable(s) are kept as they are (no unit "
+                    "needed).", text_vars)
         _check_quantities_units(rep, cols, native=native)
         _check_values(rep, data, {}, native=native)
 
@@ -1142,6 +1153,6 @@ def _validate_metadata(rep: FileReport):
                 raise ValueError
         except (ValueError, IndexError):
             rep.add(R7, "WARN", f"integration_time_s = '{it}' is not a positive number of seconds.")
-    fmt = (meta.get("data_format") or "").lower()
+    fmt = ((meta.get("data_format") or "").lower().split() or [""])[0]   # "nc (SAPHIR format)" is nc
     if fmt and fmt not in {"csv", "h5", "hdf5", "nc", "netcdf"}:
         rep.add(R8, "WARN", f"data_format = '{fmt}' should be csv, h5 or nc.")

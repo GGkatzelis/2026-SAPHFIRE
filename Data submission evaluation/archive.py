@@ -54,7 +54,18 @@ def folder_for(name: str) -> str:
     exp = campaign.experiment_for(day) if day else None
     if exp:
         return exp.folder
-    return f"Other days/{day}" if day else "Other days/undated"
+    return f"{EXTRA_DAYS}/{day}" if day else f"{EXTRA_DAYS}/undated"
+
+
+# Days outside the experiment calendar (e.g. TOC after the campaign): kept as a backup,
+# never added to the SAPHFIRE experiment list or the status page.
+EXTRA_DAYS = "_Extra days (not SAPHFIRE)"
+EXTRA_README = """Days outside the SAPHFIRE 2026 experiment calendar
+
+These files were uploaded for days that are not SAPHFIRE experiments or campaign days
+(for example TOC data from the end of July). They are kept here only as a backup.
+They are not part of the SAPHFIRE data set and do not appear on the status page.
+"""
 
 
 def original_path(name: str) -> Path:
@@ -203,6 +214,9 @@ def write_experiment_info() -> None:
         text = "\n".join(lines) + "\n"
         if not path.exists() or path.read_text(encoding="utf-8") != text:
             _write_atomic(path, text)
+    extra = S.ARCHIVE / EXTRA_DAYS
+    if extra.is_dir() and not (extra / "README.txt").exists():
+        _write_atomic(extra / "README.txt", EXTRA_README)
 
 
 REJECTED_NOTES = S.STATE_DIR / "rejected.json"

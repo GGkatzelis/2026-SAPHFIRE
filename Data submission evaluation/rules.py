@@ -39,6 +39,9 @@ INSTRUMENTS: dict[str, tuple[str, set[str]]] = {
     "FILTERS":      ("Filter sampling, oxidative potential",     {"FZJ", "PATRAS"}),
     # Built by import_saphir.py from the SAPHIR spectroradiometer files on Z:.
     "JVALUES":      ("Photolysis frequencies, spectroradiometer (chamber + ambient)", {"FZJ"}),
+    # Gas-phase total organic carbon and the tracer-based carbon gap (SOA); delivered
+    # as daily NetCDF files in the SAPHIR data-system format (first upload Nov 2026).
+    "TOC":          ("Total organic carbon, gas phase; tracer-based carbon gap / SOA", {"FZJ"}),
 }
 INSTITUTIONS = {"FZJ", "UOW", "PATRAS", "IRCELYON"}
 
@@ -53,10 +56,13 @@ STATUS_ROWS: list[tuple[str, str | None, tuple[str, ...]]] = [
     ("J-values",                  "J-values",            ("JVALUES",)),
     ("LIF (OH, HO2, RO2)",        "LIF",                 ("SAPHIR.LIF.ROx", "LIF")),
     ("kOH",                       "kOH",                 ("SAPHIR.LP_LIF.kOH", "OHREACTIVITY")),
-    ("O3, NO, NO2",               "O3, NO, NO2",         ("NOXO3",)),
+    ("O3, NO, NO2",               "O3, NO, NO2",         ("NOXO3", "SAPHIR.2BTECH_211_1014.O3.60s",
+                                                         "SAPHIR.ECOPYHSICS_CLD780TR_78515.NO_NO2_NOX.60s",
+                                                         "SAPHIR.AIRYX_ICAD_1008.NO_NO2_NOX_CHOCHO.60s")),
     ("HCHO (Picarro)",            "HCHO (Picarro)",      ("HCHO",)),
-    ("HONO",                      "HONO",                ("HONO",)),
-    ("NH3",                       "NH3",                 ("NH3",)),
+    ("HONO",                      "HONO",                ("HONO", "SAPHIR.AIRYX_ICAD_1062.NO2_HONO.60s")),
+    ("NH3",                       "NH3",                 ("NH3",
+                                                         "SAPHIR.MIRO_MGA10_0017.CH4_NH3_H2O_CO_NO_CO2_N2O_NO2_HONO_O3_OCS.60s")),
     ("TOC",                       "TOC",                 ("TOC",)),
     ("PTR-ToF-MS",                "PTR-ToF-MS",          ("PTRMS",)),
     ("H3O+ CHARON",               "H3O+ CHARON",         ("H3OCHARON", "NH4CHARON")),

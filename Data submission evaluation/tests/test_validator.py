@@ -434,3 +434,30 @@ def test_spectra_layout_and_sum(tmp_path):
     assert "must start with the columns" in _msgs(rep, "FAIL")
     rep = evaluate_file(_spectra(tmp_path, fractions=[0.5, 0.3, 0.6, 0.0]), tmp_path)
     assert "do not add up to about 1" in _msgs(rep, "WARN")
+
+
+def _saphir_format_nc(tmp: Path, name=f"{DAY}.TOC.FZJ.nc") -> Path:
+    import netCDF4
+    p = tmp / name
+    with netCDF4.Dataset(p, "w", format="NETCDF3_CLASSIC") as nc:
+        nc.definition_name, nc.name_of_platform = "def_icg", "SAPHIR"
+        nc.createDimension("time", 100); nc.createDimension("marker", 2); nc.createDimension("s", 3)
+        t = nc.createVariable("time", "f8", ("time",))
+        t.units = "seconds since 2000-1-1 00:00:00 UTC"
+        start = (pd.Timestamp(f"{DAY} 06:00") - pd.Timestamp("2000-01-01")).total_seconds()
+        t[:] = start + 300 * np.arange(100)
+        g = nc.createVariable("carbon_gap", "f8", ("time",), fill_value=-999.0)
+        g.units = "ppbC"
+        g[:] = np.linspace(-3, 40, 100) + 0.01
+        lab = nc.createVariable("marker_label", "S1", ("marker", "s"))
+        lab.set_auto_chartostring(False)
+        lab[:] = np.array([list(b"H  "), list(b"S  ")], dtype="u1").view("S1")
+    (tmp / "Metadata.TOC.FZJ.txt").write_text(META.replace("PTRMS", "TOC").replace(
+        "data_format = csv", "data_format = nc (SAPHIR format, unmodified)"))
+    return p
+
+
+def test_saphir_format_team_nc_accepted(tmp_path):
+    rep = evaluate_file(_saphir_format_nc(tmp_path), tmp_path)
+    assert rep.verdict == "ACCEPTED", _msgs(rep, "FAIL") + _msgs(rep, "WARN")
+    assert "text variable" in _msgs(rep, "INFO")

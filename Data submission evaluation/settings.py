@@ -54,6 +54,12 @@ SAPHIR_IMPORT_PRODUCTS = (
     "ASS_METEO.all_param",          # meteorology
     "SAPHIR.LIF.ROx",               # LIF: OH, HO2, RO2, ROx
     "SAPHIR.LP_LIF.kOH",            # OH reactivity
+    # trace gases (first seen on Z: Nov 2026)
+    "SAPHIR.2BTECH_211_1014.O3.60s",                      # O3, 2B Technologies
+    "SAPHIR.ECOPYHSICS_CLD780TR_78515.NO_NO2_NOX.60s",    # NO, NO2, NOx, chemiluminescence (sic: ECOPYHSICS)
+    "SAPHIR.AIRYX_ICAD_1008.NO_NO2_NOX_CHOCHO.60s",       # NO, NO2, NOx, glyoxal, Airyx ICAD
+    "SAPHIR.AIRYX_ICAD_1062.NO2_HONO.60s",                # NO2, HONO, Airyx ICAD
+    "SAPHIR.MIRO_MGA10_0017.CH4_NH3_H2O_CO_NO_CO2_N2O_NO2_HONO_O3_OCS.60s",  # MIRO MGA10 laser
 )
 # Photolysis frequencies: one file per j and location on Z: (SAPHIR.SR.jNO2, AMBIENT.SR.jO1D,
 # ...). They are merged into ONE submission-format CSV per day instead of copied.
